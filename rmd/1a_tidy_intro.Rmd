@@ -1,0 +1,174 @@
+---
+title: "Intro to RMarkdown and tidyverse"
+author: "Monica Alexander"
+date: "1/11/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Introduction
+
+This is an R Markdown document. R Markdown allows you to create nicely formatted documents (HTML, PDF, Word) that also include code and output of the code. This is good because it's reproducible, and also makes reports easier to update when new data comes in. Each of the grey chunks contains R code, just like a normal R script. You can choose to run each chunk separately, or knit the whole document using the button above, which creates your document. 
+
+There are various options for output code, results, etc. For example, if you don't want your final report to include the code (but just the output, e.g. graphs or tables) then you can specify `echo=FALSE` at the beginning of the chunk within the curly brackets (or set global options like I have done above). 
+
+Read in some packages that we'll be using:
+
+```{r}
+library(tidyverse)
+library(here)
+```
+
+# Intro to tidyverse
+
+On top of the base R functionality, there's lots of different packages that different people have made to improve the useability of the language. One of the most successful suite of packages is now called the 'tidyverse'. The tidyverse contains a range of functionality that help to manipulate and visualize data. 
+
+Read in mortality rates for Canada:
+
+```{r}
+dm <- read_table(here("data", "CAN_Mx_1x1.txt"), skip = 2)
+head(dm)
+```
+
+The object `dm` is a data frame, or tibble. Every column can be a different data type (e.g. we have integers and characters). 
+
+## Piping
+A central part of manipulating tibbles is using the `%>%` function. This is a pipe, but should be read as saying 'and then'. 
+
+For example, say we just want to pull out mortality rates for 1935. We would take our tibble *and then* filter to only include 1935:
+
+```{r}
+dm %>% 
+  filter(Year==1935)
+```
+
+You can also filter by more than one condition; say we just wanted to look at 10 year olds:
+
+```{r}
+dm %>% 
+  filter(Year==1935, Age=="10")
+```
+
+If we only wanted to look at 10 year olds in 1935 who were female, we could filter *and then* select the female column.
+
+```{r}
+dm %>% 
+  filter(Year==1935, Age=="10") %>% 
+  select(Year, Age, Female)
+```
+You can also remove columns by selecting the negative of that column name. 
+
+```{r}
+dm %>% 
+  filter(Year==1935, Age=="10") %>% 
+  select(-Total)
+```
+
+## Using ggplot
+
+You can plot things in R using the base `plot` function, but plots using `ggplot` are much prettier. 
+
+First, a bit of a clean up (make the ages and mortality rates numbers not characters)
+
+```{r}
+dm <- 
+  dm %>% 
+  mutate(Age = as.numeric(Age), 
+         Female = as.numeric(Female), 
+         Male = as.numeric(Male),
+         Total = as.numeric(Male))
+```
+
+Now say we wanted to plot the mortality rates for 30 year old males over time. In the function `ggplot`, we need to specify our data (in this case, a filtered version of dm), an x axis (Year) and y axis (Male). The axes are defined withing the `aes()` function, which stands for 'aesthetics'.
+
+First let's get our data:
+
+```{r}
+dm_to_plot <- dm %>% 
+  filter(Age==30) 
+```
+
+Now start the ggplot:
+
+```{r}
+p <- ggplot(data = dm_to_plot, aes(x = Year, y = Male))
+p
+```
+
+Notice the object `p` is just an empty box. The key to ggplot is layering: we now want to specify that we want a line plot using `geom_line()`:
+
+```{r}
+p + geom_line()
+```
+
+Let's change the color of the line, and the y-axis label, and give the plot a title:
+
+```{r}
+p + 
+  geom_line(color = "red") + 
+  ylab("Mortality rate") + 
+  ggtitle("Mortality rate for Canadian 30-year old Males, 1921-2011")
+```
+
+
+### More than one group
+
+Now say we wanted to have trends for 30-year old males and females on the one plot. The easiest way to do this is to first reshape our data so it's in long format: so instead of having a column for each sex, we have one column indicating the sex, and another column indicating the Mx value
+
+```{r}
+dm_to_plot <- dm_to_plot %>% 
+  gather(sex, mx, -Year, -Age) %>% 
+  filter(sex!="Total")
+dm_to_plot
+```
+
+Now we can do a similar plot to before but we now have an added component in the `aes()` function: color, which is determined by sex:
+
+```{r}
+p2 <- ggplot(dm_to_plot, aes(Year, mx, color = sex)) +
+  geom_line() + 
+  ylab("Mortality rate")+
+  ggtitle("Mortality rates for 30 year old Canadians, 1921-2011")
+p2
+```
+
+### Faceting
+
+A neat thing about ggplot is that it's relatively easy to create 'facets' or smaller graphs divided by groups. Say we wanted to look at trends for 30 year olds and 60 year olds for both males and females. Let's get the data ready to plot:
+
+```{r}
+dm_to_plot <- dm %>% 
+  filter(Age==30|Age==60) %>% 
+  gather(sex, mx, -Year, -Age) %>% 
+  filter(sex!="Total")
+
+dm_to_plot
+```
+
+Now let's plot, with a separate facet for each sex:
+
+```{r}
+ggplot(dm_to_plot, aes(Year, mx, color = Age, group = Age)) + 
+  geom_line()+
+  ylab("Mortality rate")+
+  facet_grid(~sex)
+  ggtitle("Mortality rates for 30 and 60 year old Canadians, 1921-2011")
+```
+
+Here's the code for the mortality curves in the lecture slides (note you can pipe data into a ggplot function!):
+
+```{r}
+dm %>% 
+  select(-Total) %>% 
+  gather(sex, mx, -Year, -Age) %>% 
+  filter(Year==1960|Year==2010, Age < 101) %>% 
+  ggplot(aes(Age, log(mx), color = sex)) +  
+  geom_line(lwd = 1.0)+ 
+  facet_grid(~Year) + 
+  ggtitle("Age- and sex-specific mortality rates for Canada") + 
+  scale_color_brewer(palette = "Set1") 
+```
+
