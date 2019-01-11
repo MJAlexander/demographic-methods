@@ -26,7 +26,7 @@ library(here)
 
 On top of the base R functionality, there's lots of different packages that different people have made to improve the useability of the language. One of the most successful suite of packages is now called the 'tidyverse'. The tidyverse contains a range of functionality that help to manipulate and visualize data. 
 
-Read in mortality rates for Canada:
+Read in mortality rates for Canada. These data come from the [Human Mortality Database](https://www.mortality.org/), which is a great source for studying mortality in high-income countries. 
 
 ```{r}
 dm <- read_table(here("data", "CAN_Mx_1x1.txt"), skip = 2)
