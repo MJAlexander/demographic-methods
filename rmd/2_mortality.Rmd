@@ -1,0 +1,41 @@
+---
+title: "Week 2"
+author: "Monica Alexander"
+date: "1/16/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Read in the data 
+All these data come from the [UN World Population Prospects 2017](https://population.un.org/wpp/).
+
+Packages:
+```{r}
+library(tidyverse)
+library(here)
+```
+
+Data: I found out about the Canadia HMD the other day! http://www.bdlc.umontreal.ca/CHMD/
+
+
+
+```{r}
+dm <- read_table(here("data", "ON_bltper_1x1.txt"), skip = 2)
+head(dm)
+```
+
+Plot lx for 2010
+
+```{r}
+dm %>% 
+  filter(Year==1921) %>% 
+  select(Age, lx) %>% 
+  ggplot(aes(as.numeric(Age), lx/100000)) + geom_line(lwd = 1.1) + 
+  ylab("lx") + xlab("age") + 
+  ggtitle("Survivorship curve for Ontario, 1921") 
+ggsave(here("plots", "ON_lx_1921.pdf"))
+```
+
