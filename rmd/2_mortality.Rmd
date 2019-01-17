@@ -71,3 +71,48 @@ dm %>%
 ggsave(here("plots", "ON_ex_1921_2011.pdf"))
 ```
 
+## Gompertz models
+
+```{r}
+dm %>% 
+  filter(Year==1921|Year==2011) %>% 
+  mutate(Year = factor(Year)) %>% 
+  ggplot(aes(as.numeric(Age), mx, color = Year)) + geom_line(lwd = 1.1) + 
+  ylab("qx") + xlab("age") + 
+  ggtitle("Probability of dying, Ontario, 1921 and 2011") + 
+  scale_y_log10()
+ggsave(here("plots", "ON_mx_1921_2011.pdf"))
+```
+
+
+
+```{r}
+dm %>% 
+  mutate(age = as.numeric(Age)) %>% 
+  filter(age>49) %>% 
+  select(Year, age, mx) %>% 
+  mutate(log_mx = log(mx)) %>% 
+  group_by(Year) %>% 
+  summarise(alpha = exp((lm(log_mx~age))$coefficients[1]), beta = (lm(log_mx~age))$coefficients[2]) %>% 
+  ggplot(aes(alpha, beta, color = Year)) + geom_point() +
+  ggtitle("Gompertz parameters for Ontario, 1921 - 2011")
+ggsave(here("plots", "ON_gompertz.pdf"))
+```
+
+## Other parametric models
+
+```{r}
+ds <- read_table(here("data", "SWE_Mx_1x1.txt"), skip = 2)
+head(ds)
+```
+
+```{r}
+ds %>% 
+  filter(Year==2015|Year==1800) %>% 
+  mutate(age = as.numeric(Age), mx = as.numeric(Total), year = as.factor(Year)) %>% 
+  filter(age>59) %>% 
+  ggplot(aes(age, log(mx), color = year)) + geom_point() + 
+  ggtitle("Log mortality rates, Sweden")
+ggsave(here("plots", "SWE_log_mx.pdf"))
+```
+
