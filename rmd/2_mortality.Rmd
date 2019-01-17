@@ -18,16 +18,16 @@ library(tidyverse)
 library(here)
 ```
 
-Data: I found out about the Canadia HMD the other day! http://www.bdlc.umontreal.ca/CHMD/
-
-
+Data: I found out about the Canadia HMD the other day! http://www.bdlc.umontreal.ca/CHMD/. Let's use the Ontario data.
 
 ```{r}
 dm <- read_table(here("data", "ON_bltper_1x1.txt"), skip = 2)
 head(dm)
 ```
 
-Plot lx for 2010
+## Characteristics life table function shapes
+
+Plot lx for 1921
 
 ```{r}
 dm %>% 
@@ -37,5 +37,37 @@ dm %>%
   ylab("lx") + xlab("age") + 
   ggtitle("Survivorship curve for Ontario, 1921") 
 ggsave(here("plots", "ON_lx_1921.pdf"))
+```
+
+```{r}
+dm %>% 
+  filter(Year==1921|Year==2011) %>% 
+  mutate(Year = factor(Year)) %>% 
+  ggplot(aes(as.numeric(Age), lx/100000, color = Year)) + geom_line(lwd = 1.1) + 
+  ylab("lx") + xlab("age") + 
+  ggtitle("Survivorship curve for Ontario, 1921 and 2011") 
+ggsave(here("plots", "ON_lx_1921_2011.pdf"))
+```
+
+
+```{r}
+dm %>% 
+  filter(Year==1921|Year==2011) %>% 
+  mutate(Year = factor(Year)) %>% 
+  ggplot(aes(as.numeric(Age), qx, color = Year)) + geom_line(lwd = 1.1) + 
+  ylab("qx") + xlab("age") + 
+  ggtitle("Probability of dying, Ontario, 1921 and 2011") + 
+  scale_y_log10()
+ggsave(here("plots", "ON_qx_1921_2011.pdf"))
+```
+
+```{r}
+dm %>% 
+  filter(Year==1921|Year==2011) %>% 
+  mutate(Year = factor(Year)) %>% 
+  ggplot(aes(as.numeric(Age), ex, color = Year)) + geom_line(lwd = 1.1) + 
+  ylab("qx") + xlab("age") + 
+  ggtitle("Life expectancy, Ontario, 1921 and 2011") 
+ggsave(here("plots", "ON_ex_1921_2011.pdf"))
 ```
 
