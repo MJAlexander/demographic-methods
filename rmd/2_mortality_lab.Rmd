@@ -1,0 +1,79 @@
+---
+title: "Week 2 exercises"
+author: "Monica Alexander"
+date: "1/18/2019"
+output: html_document
+---
+
+A short lab to calculate life tables, a life table with suicide removed, and Gompertz parameters for recent mortality in Canada. 
+
+# Read data  
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+Packages:
+```{r}
+library(tidyverse)
+library(here)
+```
+
+For this example we are using mortality in Canada by cause, 2012-2016. Available from [StatCan](https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=1310039201). 
+
+```{r}
+d <- read_csv(here("data", "CAN_age_cod.csv"))
+head(d)
+```
+
+
+# Create a life table
+
+Let's create a life table using the mortality rates from all causes of death in 2016. Get the data we need:
+
+```{r}
+dl <- d %>% 
+  filter(year==2016, cause=="Total, all causes of death  [A00-Y89]") %>% 
+  mutate(age = start_age, Mx = rate/100000) %>% 
+  select(age, Mx)
+
+head(dl)
+```
+
+You need to create columns:
+
+- $n$
+- $_na_x$
+- $_nq_x$
+- $_nd_x$
+- $_nL_x$
+- $T_x$
+- $e_x$
+
+What's the life expectancy at age 10?
+
+# Calculate cause-deleted life expectancy
+
+Now calculate life expectancy if all intentional injuries were deleted. Get the data we need:
+
+```{r}
+dls <- d %>% 
+  filter(year==2016, cause=="Total, all causes of death  [A00-Y89]"|cause=="Intentional self-harm (suicide)  [X60-X84, Y87.0]") %>% 
+  mutate(age = start_age, Mx = rate/100000) %>% 
+  select(age, cause, Mx) %>% 
+  mutate(cause = ifelse(cause=="Intentional self-harm (suicide)  [X60-X84, Y87.0]", "suicide", "total")) %>% 
+  spread(cause, Mx) %>% 
+  rename(Mx_i = suicide,
+         Mx = total)
+
+head(dls)
+```
+
+You need to create the same columns as above, but with the cause-deleted versions ($-i$). Do this by first creating the ratio $R_x^{-i} = \frac{M_x^{-i}}{M_x}$, use this to get $_nq_x^{-i}$, and the rest is the same. 
+
+What's the cause deleted life expectancy at age 10? What's the implied life lost due to suicide?
+
+
+# Fit Gompertz model over time and plot parameters
+
+Fit a Gompertz model to the total mortality rates for each year and plot the change over time. Check the fit by plotting data and fitted values. 
+
