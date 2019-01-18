@@ -116,3 +116,86 @@ ds %>%
 ggsave(here("plots", "SWE_log_mx.pdf"))
 ```
 
+## Lee-carter
+
+Let's get the Lee-carter model parameters for Ontario. First, get the matrix of age-specific rates
+
+```{r}
+m_tx <- dm %>% 
+  select(Year, Age, mx) %>% 
+  mutate(age = as.numeric(Age)) %>% 
+  filter(age < 101) %>% 
+  select(-Age) %>% 
+  spread(age, mx) %>% 
+  select(-Year) %>% 
+  as.matrix()
+
+ages <- 0:100
+years <- unique(dm$Year)
+```
+
+log and demean
+
+```{r}
+
+logm_tx <- log(m_tx)
+ax <- apply(logm_tx, 2, mean)
+```
+
+Do SVD
+```{r}
+swept_logm_tx <- sweep(logm_tx, 2, ax)
+
+svd_mx <- svd(swept_logm_tx)
+
+bx <- svd_mx$v[, 1]/sum(svd_mx$v[, 1])
+kt <- svd_mx$d[1] * svd_mx$u[, 1] * sum(svd_mx$v[, 1])
+
+```
+
+Plots!
+
+```{r}
+# plot ax
+
+lc_age_df <- tibble(age = ages, ax = ax, bx = bx)
+lc_time_df <- tibble(year = years, kt = kt)
+
+ggplot(lc_age_df, aes(age, ax)) + 
+  geom_line(lwd = 1.1) + 
+  ggtitle("ax values for Ontario")
+ggsave(here("plots", "ON_ax.pdf"))
+
+ggplot(lc_age_df, aes(age, bx)) + 
+  geom_line(lwd = 1.1) + 
+  ggtitle("bx values for Ontario")
+ggsave(here("plots", "ON_bx.pdf"))
+
+ggplot(lc_time_df, aes(year, kt)) + 
+  geom_line(lwd = 1.1) + 
+  ggtitle("kt values for Ontario")
+ggsave(here("plots", "ON_kt.pdf"))
+```
+
+let's look at the fit for a couple of years
+
+```{r}
+data_and_res <- dm %>% 
+  select(Year, Age, mx) %>% 
+  mutate(age = as.numeric(Age), year = Year) %>% 
+  filter(age < 101) %>% 
+  select(-Age, -Year) %>% 
+  mutate(log_mx = log(mx)) %>% 
+  left_join(lc_age_df) %>% 
+  left_join(lc_time_df) %>% 
+  mutate(lc_fit = ax + bx*kt)
+
+data_and_res %>% 
+  filter(year %in% c(1921, 1951, 1981, 2011)) %>% 
+  ggplot(aes(age, log_mx)) + geom_point() + facet_grid(~year) + 
+  geom_line(aes(age, lc_fit), color = "red") + 
+  ggtitle("Data and fits for Ontario")
+ggsave(here("plots", "ON_lc.pdf"))
+
+```
+
