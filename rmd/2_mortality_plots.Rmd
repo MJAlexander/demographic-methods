@@ -1,16 +1,17 @@
 ---
-title: "Week 2"
+title: "Week 2: plots from lecture"
 author: "Monica Alexander"
-date: "1/16/2019"
+date: "1/18/2019"
 output: html_document
 ---
+
+The code for generating the plots that were shown in the week 2 lecture notes. 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 
-# Read in the data 
-All these data come from the [UN World Population Prospects 2017](https://population.un.org/wpp/).
+## Read in the data 
 
 Packages:
 ```{r}
@@ -27,7 +28,7 @@ head(dm)
 
 ## Characteristics life table function shapes
 
-Plot lx for 1921
+### Survivorship
 
 ```{r}
 dm %>% 
@@ -48,7 +49,7 @@ dm %>%
   ggtitle("Survivorship curve for Ontario, 1921 and 2011") 
 ggsave(here("plots", "ON_lx_1921_2011.pdf"))
 ```
-
+### Probability of dying
 
 ```{r}
 dm %>% 
@@ -60,7 +61,7 @@ dm %>%
   scale_y_log10()
 ggsave(here("plots", "ON_qx_1921_2011.pdf"))
 ```
-
+### Life expectancy
 ```{r}
 dm %>% 
   filter(Year==1921|Year==2011) %>% 
@@ -73,6 +74,8 @@ ggsave(here("plots", "ON_ex_1921_2011.pdf"))
 
 ## Gompertz models
 
+## Plot the data
+
 ```{r}
 dm %>% 
   filter(Year==1921|Year==2011) %>% 
@@ -84,7 +87,7 @@ dm %>%
 ggsave(here("plots", "ON_mx_1921_2011.pdf"))
 ```
 
-
+### Fit Gompertz
 
 ```{r}
 dm %>% 
@@ -99,7 +102,9 @@ dm %>%
 ggsave(here("plots", "ON_gompertz.pdf"))
 ```
 
-## Other parametric models
+## Evidence of a mortality plateu?
+
+Read in data for Sweden. Note that Sweden has exceptionally good-quality data going back a long time so is often used in examples. 
 
 ```{r}
 ds <- read_table(here("data", "SWE_Mx_1x1.txt"), skip = 2)
@@ -116,9 +121,9 @@ ds %>%
 ggsave(here("plots", "SWE_log_mx.pdf"))
 ```
 
-## Lee-carter
+## Lee-carter model
 
-Let's get the Lee-carter model parameters for Ontario. First, get the matrix of age-specific rates
+Let's get the Lee-carter model parameters for Ontario. First, get the matrix of age-specific rates:
 
 ```{r}
 m_tx <- dm %>% 
@@ -134,7 +139,7 @@ ages <- 0:100
 years <- unique(dm$Year)
 ```
 
-log and demean
+log and demean those rates:
 
 ```{r}
 
@@ -142,7 +147,8 @@ logm_tx <- log(m_tx)
 ax <- apply(logm_tx, 2, mean)
 ```
 
-Do SVD
+Do the SVD
+
 ```{r}
 swept_logm_tx <- sweep(logm_tx, 2, ax)
 
