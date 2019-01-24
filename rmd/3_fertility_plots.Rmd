@@ -128,6 +128,7 @@ df %>%
   geom_line(lwd = 1.1) +
   scale_color_viridis_d()+
   geom_hline(yintercept = 2.1) + 
+    theme_gray(base_size = 14) + 
   ggtitle("Total fertility rate for selected countries, 1950-2015")
 ggsave(here("plots", "tfr_ts.pdf"))
 ```
@@ -163,5 +164,55 @@ ppr %>%
   theme_gray(base_size = 14) + 
   ggtitle("Parity Progression Ratios in Canada") 
 ggsave(here("plots", "CAN_PPR.pdf"))
+```
+
+
+## Net reproduction ratios
+
+Read in WPP life table data and clean up. 
+
+```{r}
+
+dl <- read_csv(here("data", "WPP2017_MORT_F17_3_ABRIDGED_LIFE_TABLE_FEMALE.csv"), skip = 16)
+
+dl <- dl %>% 
+  rename(region = `Region, subregion, country or area *`,
+         Lx = `Number of person-years lived L(x,n)`,
+         age = `Age (x)`,
+         period = Period) %>% 
+  select(region, period, age, Lx) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4)))
+  
+
+```
+
+Join on the fertility rates and calculate some NRRs
+
+```{r}
+
+ffab <- 0.4886
+
+NRRs <- df %>% 
+  gather(age, Fx, -region, -period, -year) %>% 
+  mutate(age = as.numeric(age)) %>% 
+  left_join(dl) %>% 
+  mutate(prod = Fx/1000*Lx/10^5*ffab) %>% 
+  group_by(region, year) %>% 
+  summarise(NRR = sum(prod))
+
+```
+
+Plot!
+
+```{r}
+NRRs %>% 
+  filter(region %in% c("Canada", "Nigeria", "Japan", "Indonesia", "India", "Kenya")) %>% 
+  ggplot(aes(year, NRR, color = region))  + 
+  geom_line(lwd = 1.1) +
+  scale_color_viridis_d()+
+  geom_hline(yintercept = 1) + 
+  theme_gray(base_size = 14) + 
+  ggtitle("NRRs for selected countries, 1950-2015")
+ggsave(here("plots", "nrr_ts.pdf"))
 ```
 
