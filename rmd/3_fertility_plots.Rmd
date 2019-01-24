@@ -1,0 +1,167 @@
+---
+title: 'Week 3: Fertility plots'
+author: "Monica Alexander"
+date: "1/24/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+Code to produce plots in lecture notes. 
+
+```{r}
+library(tidyverse)
+library(here)
+```
+Read in data on CBR and CDR and get it into a workable format. 
+```{r}
+
+db <- read_csv(here("data", "WPP2017_FERT_F03_CRUDE_BIRTH_RATE.csv"), skip = 16)
+dd <- read_csv(here("data", "WPP2017_MORT_F02_CRUDE_DEATH_RATE.csv"), skip = 16)
+
+db <- db %>% 
+  rename(region = `Region, subregion, country or area *`) %>% 
+  select(region, `1950-1955`:`2010-2015`) %>% 
+  gather(year, cbr, -region)
+
+dd <- dd %>% 
+  rename(region = `Region, subregion, country or area *`) %>% 
+  select(region, `1950-1955`:`2010-2015`) %>% 
+  gather(year, cdr, -region)
+
+d <- db %>% 
+  left_join(dd)
+
+# change year to be numeric
+
+d <- d %>% 
+  rename(period = year) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4)))
+
+```
+
+Read in the population data and get into a workable format
+
+```{r}
+d_male <- read_csv(here("data", "WPP2017_POP_F15_2_ANNUAL_POPULATION_BY_AGE_MALE.csv"), skip = 12)
+d_male$sex <- "M"
+d_female <- read_csv(here("data", "WPP2017_POP_F15_3_ANNUAL_POPULATION_BY_AGE_FEMALE.csv"), skip = 12)
+d_female$sex <- "F"
+
+dp <- rbind(d_male, d_female)
+rm(d_male, d_female)
+
+dp <- dp %>% 
+  rename(region = `Region, subregion, country or area *`,
+         year = `Reference date (as of 1 July)`) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`)
+
+head(dp)
+```
+
+Calculate total population sizes
+
+```{r}
+d_tot <- dp %>% 
+  gather(age, pop, -region, -year, -sex) %>% 
+  mutate(pop = as.numeric(pop)) %>% 
+  group_by(region, year)  %>% 
+  summarise(pop = sum(pop, na.rm = T))
+```
+
+Pick some countries and plot
+
+```{r}
+d %>% 
+  left_join(d_tot) %>% 
+  mutate(pop = pop / 2000) %>% 
+  gather(measure, value, -region, -period, -year) %>% 
+  filter(region %in% c("Nigeria", "Japan", "United Kingdom")) %>% 
+  ggplot(aes(year, value, color = measure)) + 
+  geom_line(lwd = 1.1) + 
+  facet_grid(~region) +
+  ylab("cdr, cbr, pop/2*10^8")+
+  theme_gray(base_size = 14)+
+  ggtitle("Birth rates, death rates and population, 1950-2015")
+ggsave(here("plots", "JPN_NGA_UK_dem_transition.pdf"))
+```
+
+## Age-specific fertility rates
+
+Read in WPP data
+
+```{r}
+df <- read_csv(here("data", "WPP2017_FERT_F07_AGE_SPECIFIC_FERTILITY.csv"), skip = 12)
+
+df <- df %>% 
+  rename(region = `Region, subregion, country or area *`, period = Period) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4)))
+```
+
+Plot age curves
+
+```{r}
+df %>% 
+  filter(region %in% c("Canada", "Nigeria", "Japan", "Indonesia", "India", "Kenya")) %>%
+  gather(age, asfr, -region, -period, -year) %>% 
+  mutate(age = as.numeric(age)) %>% 
+  ggplot(aes(age, asfr/1000, color = year, group = year)) + 
+  geom_line() + facet_wrap(~region) +
+  ggtitle("Age-specific fertility curves") + 
+  ylab("ASFR (births/women)")
+ggsave(here("plots", "grid_fertility.pdf"))
+```
+
+## Total fertility rates
+
+
+```{r}
+df %>% 
+  gather(age, asfr, -region, -period, -year) %>% 
+  group_by(region, year) %>% 
+  summarise(tfr = 5*sum(asfr/1000)) %>% 
+  filter(region %in% c("Canada", "Nigeria", "Japan", "Indonesia", "India", "Kenya")) %>% 
+  ggplot(aes(year, tfr, color = region))  + 
+  geom_line(lwd = 1.1) +
+  scale_color_viridis_d()+
+  geom_hline(yintercept = 2.1) + 
+  ggtitle("Total fertility rate for selected countries, 1950-2015")
+ggsave(here("plots", "tfr_ts.pdf"))
+```
+
+## Parity progression ratios
+
+Canadian data from the [Human Fertility Database](https://www.humanfertility.org/).
+
+```{r}
+ppr <- read_table(here("data", "CANpprVHbo.txt"), skip = 2)
+head(ppr)
+```
+Change into long format 
+
+```{r}
+ppr <- ppr %>% 
+  gather(measure, ratio, -Cohort) %>% 
+  mutate(parity =  as.numeric(substr(measure, 6, 6))) %>% 
+  rename(cohort = Cohort) %>% 
+  select(-measure)
+```
+
+
+Plot!
+
+```{r}
+ppr %>% 
+  mutate(parity = factor(parity)) %>% 
+  ggplot(aes(cohort, ratio, color = parity)) + 
+  geom_line(lwd = 1.1) + 
+  scale_color_viridis_d() + 
+  ylab("PPR") + 
+  theme_gray(base_size = 14) + 
+  ggtitle("Parity Progression Ratios in Canada") 
+ggsave(here("plots", "CAN_PPR.pdf"))
+```
+
