@@ -76,7 +76,7 @@ df %>%
   
 ```
 
-Let's look at parity progression ratios by birth order, and see if those differ by the sex of the child. The data used here come from the 1990 China Census, which is available on the IPUMS website (https://international.ipums.org). 
+Let's look at parity progression ratios by birth order, and see if those differ by the sex of the child. The data used here come from the 1990 China Census, which is available on the IPUMS website (https://international.ipums.org). Note these data have been reworked and the dataset consists of a 10% sample of the original 1% sample microdata, to avoid computation delays for the purposes of this illustration. So it's a 0.1% sample of the full Census. 
 
 Read in the data:
 
