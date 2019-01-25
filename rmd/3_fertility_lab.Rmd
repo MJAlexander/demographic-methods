@@ -1,0 +1,184 @@
+---
+title: 'Week 3: Fertility'
+author: "Monica Alexander"
+date: "1/25/2019"
+output: html_document
+---
+
+Calculating Net Reproduction Ratios and looking at Parity Progression Ratios in China. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+```{r}
+library(tidyverse)
+library(here)
+```
+
+
+# Calculating NRRs
+
+To calculate Net Reproduction Ratios, we need $_nF_x$ and $_nL_x$ data for periods. Let's use the WPP 2017 data. (These are already in the data folder).
+
+Load in fertility rates and tidy up:
+
+```{r}
+df <- read_csv(here("data", "WPP2017_FERT_F07_AGE_SPECIFIC_FERTILITY.csv"), skip = 12)
+
+df <- df %>% 
+  rename(region = `Region, subregion, country or area *`, period = Period) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4))) %>% 
+  gather(age, Fx, -region, -period, -year) %>% 
+  mutate(age = as.numeric(age), Fx = Fx/1000)
+
+head(df)
+```
+
+Load in the life table data and tidy up:
+
+```{r}
+dl <- read_csv(here("data", "WPP2017_MORT_F17_3_ABRIDGED_LIFE_TABLE_FEMALE.csv"), skip = 16)
+
+dl <- dl %>% 
+  rename(region = `Region, subregion, country or area *`,
+         Lx = `Number of person-years lived L(x,n)`,
+         age = `Age (x)`,
+         period = Period) %>% 
+  select(region, period, age, Lx) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4)), Lx = Lx/10^5)
+
+head(dl)
+```
+
+Calculate the NRRs for three countries of your choice and plot over time. Remember we need to adjust for the fraction female at birth, which we're approximating as $f_{fab} = 0.4886$. 
+
+
+# Fertility and Parity Progression Ratios in China
+
+China introduced a One-Child Policy in 1979. (This was relaxed in 2013 and abolished in 2015). Let's have a look at how the fertility rates and sex-based parity progression ratios changed over time. 
+
+
+## Fertility rates
+
+Firstly, let's look at fertility rates. We can do this using the WPP data from before. Let's look at TFR over time. Looks like it was already dropping substantially well before 1980. 
+
+```{r}
+df %>% 
+  filter(region=="China") %>% 
+  group_by(year) %>% 
+  summarise(TFR = sum(Fx)*5) %>% 
+  ggplot(aes(year, TFR)) + 
+  geom_line(color = "red") + 
+  geom_vline(xintercept = 1980) + 
+  ggtitle("TFR for China, 1950-2015")
+  
+```
+
+Let's look at parity progression ratios by birth order, and see if those differ by the sex of the child. The data used here come from the 1990 China Census, which is available on the IPUMS website (https://international.ipums.org). 
+
+Read in the data:
+
+```{r}
+d <- read_csv(here("data", "CHN_parity_1990.csv"))
+head(d)
+```
+
+Let's look at the proportion of births that are female. Calculate the proportions by 1) parity / birth order and 2) age of child:
+
+```{r}
+pf1 <- d %>% 
+  filter(age1<16) %>% 
+  group_by(age1) %>% 
+  summarise(prop_female1 = sum(sex1=="f")/n()) %>% 
+  rename(age = age1)
+
+pf2 <- d %>% 
+  filter(age2<16) %>% 
+  group_by(age2) %>% 
+  summarise(prop_female2 = sum(sex2=="f")/n()) %>% 
+  rename(age = age2)
+
+pf3 <- d %>% 
+  filter(age3<16) %>% 
+  group_by(age3) %>% 
+  summarise(prop_female3 = sum(sex3=="f")/n()) %>% 
+  rename(age = age3)
+
+
+pf1 %>% 
+  left_join(pf2) %>% 
+  left_join(pf3) %>% 
+  gather(parity, prop, -age) %>% 
+  mutate(parity = substr(parity, nchar(parity), nchar(parity))) %>% 
+  ggplot(aes(age, prop, color = parity)) + 
+  geom_line(lwd = 1.1) + 
+  ggtitle("Proportion of females at birth by age and parity, China 1990") + 
+  geom_vline(xintercept = 10)
+```
+
+How does the decision to have another child depend on the sex of already born? Let's calculate parity progression ratios for moving from first to second child by sex of child. 
+
+```{r}
+ppr1 <- d %>% 
+  filter(age1<16) %>% 
+  group_by(sex1, age1) %>% 
+  summarise(ppr1 = sum(nkids>1)/n()) %>% 
+  rename(sex = sex1, age = age1)
+
+ppr1 %>% 
+  rename(ppr = ppr1) %>% 
+  ggplot(aes(age, ppr, color = sex)) + 
+  geom_point()+
+  geom_vline(xintercept = 10) + 
+  ggtitle("Parity progression ratios for 1st to 2nd child by sex of first child")
+```
+
+Let's look at the ratio of PPR girls to boys just to make it clearer:
+
+```{r}
+ppr1 %>% 
+  rename(ppr = ppr1) %>% 
+  group_by(age) %>% 
+  summarise(ratio = ppr[sex=="f"]/ppr[sex=="m"]) %>% 
+  filter(age>0) %>% 
+  ggplot(aes(age, ratio)) + 
+  geom_point()+
+  geom_vline(xintercept = 10) + 
+  ggtitle("Ratio of PPR female to male")
+```
+
+For higher order parities (moving from second to third child), calculate the PPRs, split by sex of first and second child:
+
+```{r}
+ppr2_m <- d %>% 
+  filter(age1<16&age2<16) %>% 
+  filter(sex1=="m") %>% 
+  group_by(sex2, age2) %>% 
+  summarise(ppr2 = sum(nkids>2)/n()) %>% 
+  rename(sex = sex2, age = age2) %>% 
+  mutate(sex1 = "first born is male")
+
+ppr2_f <- d %>% 
+  filter(age1<16&age2<16) %>% 
+  filter(sex1=="f") %>% 
+  group_by(sex2, age2) %>% 
+  summarise(ppr2 = sum(nkids>2)/n()) %>% 
+  rename(sex = sex2, age = age2) %>% 
+  mutate(sex1 = "first born is female")
+
+ppr2_m %>% 
+  bind_rows(ppr2_f) %>% 
+  ggplot(aes(age, ppr2, color = sex)) + facet_grid(~sex1) + 
+  geom_point() + 
+  ggtitle("PPR to third child by sex of first two children \nChina 1990") + 
+  geom_vline(xintercept = 10) + 
+  scale_color_discrete(name = "sex of second born") + 
+  ylab("PPR")
+```
+
+# Getting data from IPUMS
+
+Demostration on how to get microdata from IPUMS: https://www.ipums.org/
+
