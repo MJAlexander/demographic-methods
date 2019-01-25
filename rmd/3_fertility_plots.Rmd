@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
 
 Code to produce plots in lecture notes. 
 
+## Data
+
 ```{r}
 library(tidyverse)
 library(here)
@@ -133,6 +135,21 @@ df %>%
 ggsave(here("plots", "tfr_ts.pdf"))
 ```
 
+Just Canada: data from the [Human Fertility Database](https://www.humanfertility.org/).
+
+```{r}
+dfc <- read_table(here("data", "CANtfrRRbo.txt"), skip = 2)
+
+dfc %>% 
+  select(Year, TFR) %>% 
+  ggplot(aes(Year, TFR)) + 
+  geom_line(lwd = 1.1) +
+  ggtitle("TFR for Canada, 1944-2011") + 
+  theme_grey(base_size = 14) 
+ggsave(here("plots", "CAN_tfr.pdf"))
+```
+
+
 ## Parity progression ratios
 
 Canadian data from the [Human Fertility Database](https://www.humanfertility.org/).
@@ -165,6 +182,27 @@ ppr %>%
   ggtitle("Parity Progression Ratios in Canada") 
 ggsave(here("plots", "CAN_PPR.pdf"))
 ```
+
+
+Can also loook at TFR by parity:
+```{r}
+dfc_long <- dfc %>% 
+  select(Year:TFR5p) %>% 
+  select(-TFR) %>% 
+  gather(measure, value, - Year) %>% 
+  mutate(parity = as.numeric(substr(measure, nchar(measure) , nchar(measure)))) %>% 
+  mutate(parity = ifelse(is.na(parity), 5, parity)) %>% 
+  select(-measure) %>% 
+  rename(tfr = value)
+
+dfc_long %>% 
+  mutate(parity = factor(parity)) %>% 
+  ggplot(aes(Year, tfr, color = parity)) + 
+  geom_line(lwd = 1.1) + 
+  scale_color_viridis_d()
+  
+```
+
 
 
 ## Net reproduction ratios
@@ -214,5 +252,167 @@ NRRs %>%
   theme_gray(base_size = 14) + 
   ggtitle("NRRs for selected countries, 1950-2015")
 ggsave(here("plots", "nrr_ts.pdf"))
+```
+
+
+## Coale and Trussel's M and m
+
+Define our constant age schedules
+
+```{r}
+n_x <- tibble(age = seq(15, 45, by = 5), nx = c(0.36, 0.46, 0.431, 0.396, 0.321, 0.167, 0.024))
+nu_x <- tibble(age = seq(15, 45, by = 5), nu = c(0,0,0.279, 0.667, 1.042, 1.414, 1.67)) 
+```
+
+Fit the model
+
+```{r}
+
+ct_res <- df %>% 
+  gather(age, Fx, -region, -period, -year) %>% 
+  mutate(age = as.numeric(age)) %>% 
+  left_join(n_x) %>% 
+  left_join(nu_x) %>% 
+  mutate(log_ratio = log(Fx/1000/nx)) %>% 
+  mutate(isna = is.infinite(log_ratio)) %>% 
+  filter(!isna) %>% 
+  group_by(region, year) %>% 
+  summarise(big_m = exp((lm(log_ratio~nu))$coefficients[1]),  small_m = -1*(lm(log_ratio~nu))$coefficients[2]) 
+
+```
+
+
+Plot fits and data (does not do a good job).
+
+```{r}
+
+data_and_fits <- df %>% 
+  gather(age, Fx, -region, -period, -year) %>% 
+  mutate(age = as.numeric(age)) %>% 
+  left_join(n_x) %>% 
+  left_join(nu_x) %>% 
+  left_join(ct_res) %>% 
+  mutate(fit_original_scale = nx*exp(log(big_m) - small_m*nu)*1000,
+         dependent_var = log(Fx/1000/nx),
+         fit_log_scale = log(big_m) - small_m*nu)
+
+
+data_and_fits %>% 
+  filter(region %in% c("Canada", "Nigeria", "Japan", "Bangladesh", "India", "Kenya")) %>% 
+  filter(year %in% c(1950, 2010)) %>% 
+  mutate(year = factor(year)) %>% 
+  ggplot(aes(age, dependent_var, color = year, group = year)) + 
+  facet_wrap(~region) + geom_point() + 
+  geom_line(aes(age, fit_log_scale))
+
+
+data_and_fits %>% 
+  filter(region %in% c("Canada", "Nigeria", "Japan", "Bangladesh", "India", "Kenya")) %>% 
+  filter(year %in% c(1950, 2010)) %>% 
+  mutate(year = factor(year)) %>% 
+  ggplot(aes(age, Fx, color = year)) + 
+  facet_wrap(~region) + geom_point() + 
+  geom_line(aes(age, fit_original_scale))+
+  theme_gray(base_size = 14) + 
+  ggtitle("Data and Coale and Trussel fit, 1950 and 2010")
+ggsave(here("plots", "ct_fit.pdf"))
+
+```
+
+
+Plot scatter over time
+
+```{r}
+ct_res %>% 
+  filter(region %in% c("Canada", "Nigeria", "Japan", "Bangladesh", "India", "Kenya")) %>% 
+  ggplot(aes(big_m, small_m, color = year)) + 
+  facet_wrap(~region) + 
+  geom_point() + 
+  theme_grey(base_size = 14) + 
+  ylab("level of fertility") + 
+  xlab("level of fertility limitation") + 
+  ggtitle("Coale and Trussel's M and m for selected countries \n1950-2010")
+ggsave(here("plots", "ct_scatter.pdf"))
+```
+
+## Tempo adjusted TFR
+
+Calculate tempo-adjusted TFRs by parity then sum. Note the Human Fertility Database has the data. 
+
+
+```{r}
+dmac <- read_table(here("data", "CANmabRRbo.txt"), skip = 2)
+
+mab_tfr <- dmac %>% 
+  select(Year:MAB5p) %>% 
+  select(-MAB) %>% 
+  gather(measure, value, - Year) %>% 
+  mutate(parity = as.numeric(substr(measure, nchar(measure) , nchar(measure)))) %>% 
+  mutate(parity = ifelse(is.na(parity), 5, parity)) %>% 
+  select(-measure) %>% 
+  rename(mab = value) %>% 
+  left_join(dfc_long) 
+
+tfr_adj <- mab_tfr %>% 
+  mutate(diff_mab = (mab - lag(mab))/2,
+         tfr_dash = tfr/(1-diff_mab)) %>% 
+  group_by(Year) %>% 
+  summarise(unadjusted = sum(tfr),
+            tempo_adjusted = sum(tfr_dash)) 
+
+head(tfr_adj)
+
+```
+
+Plot!
+
+```{r}
+tfr_adj %>% 
+  gather(tfr, value, -Year) %>% 
+  ggplot(aes(Year, value, color = tfr)) + 
+  geom_line(lwd = 1.1) + 
+  ggtitle("TFR and tempo-adjusted TFR \nCanada 1944-2011")
+ggsave(here("plots", "CAN_tempo.pdf"))
+```
+
+What about Japan?
+
+
+```{r}
+dfj <- read_table(here("data", "JPNtfrRRbo.txt"), skip = 2)
+dmaj <- read_table(here("data", "JPNmabRRbo.txt"), skip = 2)
+
+dfj_long <- dfj %>% 
+  select(Year:TFR5p) %>% 
+  select(-TFR) %>% 
+  gather(measure, value, - Year) %>% 
+  mutate(parity = as.numeric(substr(measure, nchar(measure) , nchar(measure)))) %>% 
+  mutate(parity = ifelse(is.na(parity), 5, parity)) %>% 
+  select(-measure) %>% 
+  rename(tfr = value)
+
+mab_tfr <- dmaj %>% 
+  select(Year:MAB5p) %>% 
+  select(-MAB) %>% 
+  gather(measure, value, - Year) %>% 
+  mutate(parity = as.numeric(substr(measure, nchar(measure) , nchar(measure)))) %>% 
+  mutate(parity = ifelse(is.na(parity), 5, parity)) %>% 
+  select(-measure) %>% 
+  rename(mab = value) %>% 
+  left_join(dfj_long) 
+
+tfr_adj <- mab_tfr %>% 
+  mutate(diff_mab = (mab - lag(mab))/2,
+         tfr_dash = tfr/(1-diff_mab)) %>% 
+  group_by(Year) %>% 
+  summarise(unadjusted = sum(tfr),
+            tempo_adjusted = sum(tfr_dash)) 
+
+tfr_adj %>% 
+  gather(tfr, value, -Year) %>% 
+  ggplot(aes(Year, value, color = tfr)) + 
+  geom_line(lwd = 1.1) + 
+  ggtitle("TFR and tempo-adjusted TFR \nJapan 1944-2011")
+
 ```
 
