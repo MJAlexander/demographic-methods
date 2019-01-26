@@ -54,6 +54,22 @@ head(dl)
 
 Calculate the NRRs for three countries of your choice and plot over time. Remember we need to adjust for the fraction female at birth, which we're approximating as $f_{fab} = 0.4886$. 
 
+Example:
+
+```{r}
+ffab <- 0.4886
+
+df %>% 
+  left_join(dl) %>% 
+  mutate(prod = Fx*Lx*ffab) %>% 
+  group_by(region, year) %>% 
+  summarise(NRR = sum(prod)) %>% 
+  filter(region %in% c("Peru", "Pakistan", "Mozambique", "Canada", "Australia")) %>% 
+  ggplot(aes(year, NRR, color = region)) +
+  geom_line()
+```
+
+
 
 # Fertility and Parity Progression Ratios in China
 
