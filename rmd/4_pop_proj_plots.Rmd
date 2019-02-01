@@ -5,6 +5,8 @@ date: "1/31/2019"
 output: html_document
 ---
 
+Code to produce plots in lecture notes for week 4. 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
 ```
@@ -13,6 +15,8 @@ knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
 library(tidyverse)
 library(here)
 ```
+
+# Stable population
 
 Simple illustration of stable population. Set up the constants:
 
@@ -80,8 +84,9 @@ dp %>%
 ggsave(here("plots", "stable_prop.pdf"))
 ```
 
-
 # Trial values of $r$
+
+Let's plot the Euler-Lotka equation on the log scale as a function of R. First, we need Lx and Fx values
 
 ```{r}
 df <- read_csv(here("data", "WPP2017_FERT_F07_AGE_SPECIFIC_FERTILITY.csv"), skip = 12)
@@ -147,7 +152,7 @@ ggplot(data = tibble(r = rs, log_Yr = log(Yrs)), aes(r, log_Yr)) +
 ggsave(here("plots", "euler_lotka_yr.pdf"))
 ```
 
-## Leslie matrices
+# Leslie matrices
 
 Create a function that makes a Leslie matrix based on $_nL_x$ and $_nF_x$ values
 
@@ -188,6 +193,13 @@ A <- leslie(nLx, nFx)
 A
 ```
 
+Note that we can calculate NRR from the matrix elements:
+
+```{r}
+A[1,]%*%cumprod(c(1,diag(A[-1,])))
+```
+
+
 ## Projecting Canada's population
 
 Get the population in 2010 from WPP data. 
@@ -211,6 +223,8 @@ ggplot(tibble(age = seq(0, 80, by = 5), K = Kt), aes(age, K)) +
   geom_bar(stat= "identity") + coord_flip() + ylab("Population") + ggtitle("Female population, Canada 2010")
 ggsave(here("plots", "CAN_pop_2010.pdf"))
 ```
+
+Do the projection up to 2050 in a loop:
 
 ```{r}
 age_groups <- seq(0, 80, by = 5)
@@ -265,7 +279,7 @@ dk %>%
   ggtitle("Proportion of population by age group \nCanada 2010-2050")
 ggsave(here("plots", "CAN_prop_proj.pdf"))
 ```
-Do it over a long time
+Do the projection over a long time:
 
 ```{r}
 n_projections <- 40
@@ -295,5 +309,140 @@ dk %>%
   geom_line() + 
   ggtitle("Proportion of population by age group \nCanada 2010-2250")
 ggsave(here("plots", "CAN_prop_proj_long.pdf"))
+```
+
+## Eigendecomposition
+
+```{r}
+
+eigen_A <- eigen(A)
+r_A <- log(Re(eigen_A$value[1]))/5 
+v <- Re(eigen_A$vectors[,1])
+k_A <- v/sum(v)
+
+r_A
+k_A
+
+```
+
+
+Reproductive value:
+
+```{r}
+eigen_A <- eigen(A[1:length(seq(0, 45, by = 5)), 1:length(seq(0, 45, by = 5))])
+U <- eigen_A$vector
+U <-U%*%diag(1/U[1,])
+Uinv <- solve(U)
+Vstar <- diag(1/Uinv[,1]) %*% Uinv # normalize
+
+ggplot(tibble(age = seq(0, 45, by = 5), V = Re(Vstar[1,])), aes(age, V)) + 
+  geom_line() + 
+  ggtitle("Reproductive Values for Canada, 2010")
+ggsave(here("plots", "CAN_rv.pdf"))
+```
+
+Mean age at childbearing:
+
+```{r}
+(Re((Vstar%*%U))*5)[1,1]
+```
+
+# Population momentum
+
+Calculate the keyfitz scenario multiplier for Canada in 2010. Note, we need to read in ex values to get life expectancy:
+
+```{r}
+NRR <- sum(nFx*nLx*0.4886)
+de <- read_csv(here("data", "WPP2017_MORT_F17_3_ABRIDGED_LIFE_TABLE_FEMALE.csv"), skip = 16)
+
+ex <- de %>% 
+  rename(region = `Region, subregion, country or area *`,
+         ex = `Expectation of life e(x)`,
+         age = `Age (x)`,
+         period = Period) %>% 
+  select(region, period, age, ex) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4))) %>% 
+  filter(region == "Canada", age==0, year==2010) %>% 
+  select(ex) %>% 
+  pull()
+
+b_pre <- 1/sum(exp(-r_A*seq(0, 80, by = 5))*nLx)
+
+ex*b_pre/sqrt(NRR)
+
+```
+
+Let's actually make the Leslie matrix stationary and see what happens to population
+
+```{r}
+B <- rbind(A[1,]/NRR, A[-1,])
+
+n_projections <- 40
+K <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+K[,1] <- Kt[1:n_age_groups]
+
+# do the projection!
+for(i in 2:(n_projections+1)){
+  K[,i] <- B%*%K[,i-1] 
+}
+
+Kdf <- as_tibble(K)
+colnames(Kdf) <- seq(from = 2010, to = (2010+n_projections*5), by = 5)
+Kdf <- cbind(age = seq(from = 0, to = 80, by = 5), Kdf)
+
+# get in long format and then add proportion of population in each age group
+dk <- Kdf %>% 
+  gather(year, population, -age) %>%
+  mutate(year = as.numeric(year)) %>% 
+  group_by(year) %>%
+  mutate(proportion = population/sum(population))
+
+dk %>% 
+  group_by(year) %>% 
+  summarise(pop = sum(population)) %>% 
+  ggplot(aes(year, pop)) + 
+  geom_line() + 
+  ggtitle("Population over time if NRR was 1 \nCanada 2010-2250")
+ggsave(here("plots", "CAN_keyfitz_nonstable.pdf"))
+
+dk %>% 
+  group_by(year) %>% 
+  summarise(pop = sum(population)) %>% 
+  summarise(pop[row_number()==n()]/pop[row_number()==1])
+```
+
+
+# Extra stuff
+
+Playing around with stationary and non-stationary momentum (not covered in lecture)
+
+```{r}
+U <- eigen(A[1:length(seq(0, 45, by = 5)), 1:length(seq(0, 45, by = 5))])$vectors
+U <-U%*%diag(1/U[1,])
+u <- as.vector(Re(U[,1]))
+Uinv <- solve(U)
+Vstar <- diag(1/Uinv[,1]) %*% Uinv 
+v <- as.vector(Re(Vstar[1,]))
+
+B <- rbind(A[1,]/NRR, A[-1,])
+eigen_B <- eigen(B[1:length(seq(0, 45, by = 5)), 1:length(seq(0, 45, by = 5))])
+
+U0 <- eigen_B$vector
+U0 <-U0%*%diag(1/U0[1,])
+u0 <- as.vector(Re(U0[,1]))
+U0inv <- solve(U0)
+Vstar0 <- diag(1/U0inv[,1]) %*% U0inv 
+v0 <- as.vector(Re(Vstar0[1,]))
+
+keyfitz <- sum(v0*u*5)/sum(v0*u0*5)*sum(u0)/sum(u)
+
+kt <- Kt/sum(Kt)
+
+stationfac <- sum(v0*kt*5)/sum(v0*u0*5)*sum(u0)/sum(kt)
+stablefac <- sum(v*kt*5)/sum(v*u*5)*sum(u)/sum(kt)
+
+stationfac
+stablefac*keyfitz
+
 ```
 
