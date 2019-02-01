@@ -80,7 +80,7 @@ head(d_female)
 unique(df$region)
 ```
 
-2. Calculate the NRR for each of the countries. Confirm that these are one high and one low, based on NRR values. 
+2. Calculate the NRR for each of the countries in 2010. Confirm that these are one high and one low, based on NRR values. 
 
 Remember: discrete version of NRR is
 
@@ -93,6 +93,9 @@ and the fraction female at birth is something like 0.4886.
 ## Leslie matrix
 
 3. Create a Leslie matrix for each of your countries. The function below will help. This is pretty ugly so if someone want to rewrite it feel free :)
+
+Note: Fx only covers 15-45, but it needs to be 0 for all other age groups (probably easiest to `left_join` `df` to `dl` then replace the `NA` values with 0s).
+Note 2: From the WPP data we have a split first age group, but want to convert this into 0-5. Just sum the Lx values to get $_5L0$
 
 ```{r}
 leslie <- function(nLx,
@@ -160,11 +163,12 @@ dk1 <- Kdf %>%
 dproj <- bind_rows(dk1, dk2)
 ```
 
-7. Plot the total population size over time and the proportion in each age group
+7a. Plot the total population size over time 
+7b. Plot the proportion in each age group over time
 
 ## Eigendecompositions
 
-8. Do an eigendecomposition on `A` using `eigen(A)`. What is the intrinsic growth rate? What is the implied stable population age structure? 
+8. Do an eigendecomposition on both your `A`s using `eigen(A)`. What is the intrinsic growth rate? What is the implied stable population age structure? 
 
 Hints: $\lambda = e^{rn}$ where $\lambda$ is the leading eigenvalue and $c(x)$ is the first right eigenvector of $A$, normalized to sum to one. 
 
