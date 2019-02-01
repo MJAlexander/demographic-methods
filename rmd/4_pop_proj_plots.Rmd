@@ -1,0 +1,299 @@
+---
+title: 'Week 4: Stable populations and population projection'
+author: "Monica Alexander"
+date: "1/31/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+```{r}
+library(tidyverse)
+library(here)
+```
+
+Simple illustration of stable population. Set up the constants:
+
+```{r}
+lx <- c(1, 0.6, 0.4, 0.2, 0.05, 0)
+B <- 1000
+r <- 0.1
+```
+
+Set up initial population until we have a full column
+
+```{r}
+c1 <- diag(lx*B)
+
+for(i in 1:(nrow(c1)-1)){
+  for(j in i:(ncol(c1)-1)){
+    c1[i,j+1] <- c1[i,j]*exp(r)
+  }
+}
+
+colnames(c1) <- paste0("P", 1:6)
+
+dp <- as_tibble(cbind(lx, as_tibble(c1)))
+
+```
+
+Now do a few more years
+
+```{r}
+dp <- dp %>% 
+  mutate(P7 = P6*exp(r),
+         P8 = P7*exp(r), 
+         P9 = P8*exp(r))
+```
+
+Plot these
+
+```{r}
+dp %>% 
+  mutate(age = 0:5) %>% 
+  gather(time, population, -age, -lx) %>% 
+  mutate(year = as.numeric(substr(time, 2, 2))) %>% 
+  group_by(year) %>% 
+  mutate(prop = population/ sum(population)) %>% 
+  filter(year > 4) %>% 
+  ungroup() %>% 
+  mutate(year = factor(year)) %>% 
+  ggplot(aes(x = age, y = population, fill = year)) + 
+  geom_bar(stat="identity", position = "dodge") +  coord_flip() +
+  ggtitle("Population by year and age group")
+ggsave(here("plots", "stable_pop.pdf"))
+
+dp %>% 
+  mutate(age = 0:5) %>% 
+  gather(time, population, -age, -lx) %>% 
+  mutate(year = as.numeric(substr(time, 2, 2))) %>% 
+  group_by(year) %>% 
+  mutate(prop = population/ sum(population)) %>% 
+  filter(year > 4) %>% 
+  ungroup() %>% 
+  mutate(year = factor(year)) %>% 
+  ggplot(aes(x = age, y = prop, fill = year)) + 
+  geom_bar(stat="identity", position = "dodge") +  coord_flip() +
+  ggtitle("Proportion by year and age group")
+ggsave(here("plots", "stable_prop.pdf"))
+```
+
+
+# Trial values of $r$
+
+```{r}
+df <- read_csv(here("data", "WPP2017_FERT_F07_AGE_SPECIFIC_FERTILITY.csv"), skip = 12)
+
+df <- df %>% 
+  rename(region = `Region, subregion, country or area *`, period = Period) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4))) %>% 
+  gather(age, Fx, -region, -period, -year) %>% 
+  mutate(age = as.numeric(age), Fx = Fx/1000)
+
+dl <- read_csv(here("data", "WPP2017_MORT_F17_3_ABRIDGED_LIFE_TABLE_FEMALE.csv"), skip = 16)
+
+dl <- dl %>% 
+  rename(region = `Region, subregion, country or area *`,
+         Lx = `Number of person-years lived L(x,n)`,
+         age = `Age (x)`,
+         period = Period) %>% 
+  select(region, period, age, Lx) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4)), Lx = Lx/10^5)
+```
+
+Let's look at trial values of $r$ for Canada. The NRR is less than one, so what is $r$?
+
+```{r}
+
+df %>% 
+  left_join(dl) %>% 
+  filter(year==2010, region == "Canada") %>% 
+  mutate(prod = Fx*Lx*0.4886) %>% 
+  summarise(sum(prod))
+
+```
+
+Let's plot $Y(r)$ at different $r$
+
+```{r}
+
+prod <- df %>% 
+  left_join(dl) %>% 
+  filter(year==2010, region == "Canada") %>% 
+  mutate(prod = Fx*Lx*0.4886) %>% 
+  select(prod) %>% 
+  pull()
+
+ages <- seq(15, 45, by = 5)
+
+get_Yr <- function(prod, r){
+  exp_ra <- exp(-r*ages)
+  return(sum(prod*exp_ra))
+}
+
+get_Yr(prod, r)
+
+rs <- seq(-0.1, 0.1, by = 0.001)
+Yrs <- sapply(1:length(rs), function(i) get_Yr(prod, rs[i]))
+
+ggplot(data = tibble(r = rs, log_Yr = log(Yrs)), aes(r, log_Yr)) + 
+  geom_line() + 
+  geom_hline(yintercept = 0, lty = 2) + 
+  geom_vline(xintercept = -0.009, color = "red") + 
+  ggtitle("Log of Euler-Lotka for different values of r \nCanada 2010")
+ggsave(here("plots", "euler_lotka_yr.pdf"))
+```
+
+## Leslie matrices
+
+Create a function that makes a Leslie matrix based on $_nL_x$ and $_nF_x$ values
+
+```{r}
+leslie <- function(nLx,
+                   nFx, 
+                   n_age_groups=17,
+                   ffab = 0.4886){
+  L = matrix(0, nrow = n_age_groups, ncol = n_age_groups)
+  L[1,] = ffab * nLx[1]*(nFx[1:n_age_groups]+nFx[2:(n_age_groups+1)]*nLx[2:(n_age_groups+1)]/nLx[1:n_age_groups])/2 # top row 
+  L[1,ncol(L)] <- 0
+  diag(L[2:n_age_groups,1:(n_age_groups-1)]) = nLx[2:n_age_groups] / nLx[1:(n_age_groups-1)] # subdiagonal
+  return(L)
+}
+```
+
+Make a Leslie matrix for Canada
+
+```{r}
+nLx <- dl %>% 
+  left_join(df) %>% 
+  filter(year==2010, region == "Canada", age<85) %>% 
+  select(Lx) %>% pull()
+
+## need to fix first age group
+
+nLx <- c(sum(nLx[1:2]), nLx[3:length(nLx)])
+
+nFx <- dl %>% 
+  left_join(df) %>% 
+  filter(year==2010, region == "Canada") %>% 
+  mutate(Fx = ifelse(is.na(Fx), 0, Fx)) %>% 
+  select(Fx) %>% pull()
+
+nFx <- nFx[-1]
+
+A <- leslie(nLx, nFx)
+A
+```
+
+## Projecting Canada's population
+
+Get the population in 2010 from WPP data. 
+
+```{r}
+d_female <- read_csv(here("data", "WPP2017_POP_F15_3_ANNUAL_POPULATION_BY_AGE_FEMALE.csv"), skip = 12)
+
+Kt <- d_female %>% 
+  rename(region = `Region, subregion, country or area *`,
+         year = `Reference date (as of 1 July)`) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`) %>% 
+  filter(region=="Canada", year==2010) %>% 
+  gather(age, pop, -region, -year) %>% 
+  mutate(age = as.numeric(age)) %>% 
+  filter(age<85) %>% 
+  mutate(pop = as.numeric(pop)) %>% 
+  select(pop) %>% 
+  pull()
+  
+ggplot(tibble(age = seq(0, 80, by = 5), K = Kt), aes(age, K)) + 
+  geom_bar(stat= "identity") + coord_flip() + ylab("Population") + ggtitle("Female population, Canada 2010")
+ggsave(here("plots", "CAN_pop_2010.pdf"))
+```
+
+```{r}
+age_groups <- seq(0, 80, by = 5)
+n_age_groups <-  length(age_groups)
+n_projections <- 8
+initial_pop <- Kt
+# define population matrix K
+K <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+K[,1] <- Kt[1:n_age_groups]
+
+# do the projection!
+for(i in 2:(n_projections+1)){
+  K[,i] <- A%*%K[,i-1] 
+}
+
+K
+```
+
+```{r}
+Kdf <- as_tibble(K)
+colnames(Kdf) <- seq(from = 2010, to = (2010+n_projections*5), by = 5)
+Kdf <- cbind(age = seq(from = 0, to = 80, by = 5), Kdf)
+
+# get in long format and then add proportion of population in each age group
+dk <- Kdf %>% 
+  gather(year, population, -age) %>%
+  mutate(year = as.numeric(year)) %>% 
+  group_by(year) %>%
+  mutate(proportion = population/sum(population))
+dk
+```
+
+Plot total population size over time
+
+```{r}
+dk %>% 
+  group_by(year) %>% 
+  summarise(pop = sum(population)) %>% 
+  ggplot(aes(year, pop)) + geom_line() + 
+  ggtitle("Canada's female population, 2010-2050")
+ggsave(here("plots", "CAN_pop_proj.pdf"))
+```
+
+Plot proportions over time
+
+```{r}
+dk %>% 
+  filter(age %in% seq(0, 80, by = 10)) %>% 
+  mutate(age = factor(age)) %>% 
+  ggplot(aes(year, proportion, color = age)) + 
+  geom_line() + 
+  ggtitle("Proportion of population by age group \nCanada 2010-2050")
+ggsave(here("plots", "CAN_prop_proj.pdf"))
+```
+Do it over a long time
+
+```{r}
+n_projections <- 40
+K <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+K[,1] <- Kt[1:n_age_groups]
+
+# do the projection!
+for(i in 2:(n_projections+1)){
+  K[,i] <- A%*%K[,i-1] 
+}
+
+Kdf <- as_tibble(K)
+colnames(Kdf) <- seq(from = 2010, to = (2010+n_projections*5), by = 5)
+Kdf <- cbind(age = seq(from = 0, to = 80, by = 5), Kdf)
+
+# get in long format and then add proportion of population in each age group
+dk <- Kdf %>% 
+  gather(year, population, -age) %>%
+  mutate(year = as.numeric(year)) %>% 
+  group_by(year) %>%
+  mutate(proportion = population/sum(population))
+
+dk %>% 
+  filter(age %in% seq(0, 80, by = 10)) %>% 
+  mutate(age = factor(age)) %>% 
+  ggplot(aes(year, proportion, color = age)) + 
+  geom_line() + 
+  ggtitle("Proportion of population by age group \nCanada 2010-2250")
+ggsave(here("plots", "CAN_prop_proj_long.pdf"))
+```
+
