@@ -1,0 +1,474 @@
+---
+title: 'Week 4: Stable populations and population projection'
+author: "Monica Alexander"
+date: "2/1/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+
+For this lab, we are going to pick two countries from the WPP data (one high fertility, one low fertility) and do some projections and calculations. 
+
+# Load in data
+
+
+```{r}
+library(tidyverse)
+library(here)
+```
+
+Loading in the data. For this lab we will need fertility rates, populations by age, the Lx and ex columns of the life table. 
+
+Load in fertility rates and tidy up:
+
+```{r}
+df <- read_csv(here("data", "WPP2017_FERT_F07_AGE_SPECIFIC_FERTILITY.csv"), skip = 12)
+
+df <- df %>% 
+  rename(region = `Region, subregion, country or area *`, period = Period) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4))) %>% 
+  gather(age, Fx, -region, -period, -year) %>% 
+  mutate(age = as.numeric(age), Fx = Fx/1000)
+
+head(df)
+```
+
+Load in the life table data and tidy up. Note: I'm getting rid of the 85+ age group, because the implied age interval is more than 5 years, so this will stuff up our Leslie matrix. 
+
+```{r}
+dl <- read_csv(here("data", "WPP2017_MORT_F17_3_ABRIDGED_LIFE_TABLE_FEMALE.csv"), skip = 16)
+
+dl <- dl %>% 
+  rename(region = `Region, subregion, country or area *`,
+         Lx = `Number of person-years lived L(x,n)`,
+         ex = `Expectation of life e(x)`,
+         age = `Age (x)`,
+         period = Period) %>% 
+  select(region, period, age, Lx, ex) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4)), Lx = Lx/10^5) %>% 
+  filter(age<85)
+
+head(dl)
+```
+
+Load in the population data and tidy up. Note: filter out the older ages, because of the age groups we have in the mortality data. 
+
+```{r}
+d_female <- read_csv(here("data", "WPP2017_POP_F15_3_ANNUAL_POPULATION_BY_AGE_FEMALE.csv"), skip = 12)
+
+d_female <- d_female %>% 
+  rename(region = `Region, subregion, country or area *`,
+         year = `Reference date (as of 1 July)`) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`) %>% 
+  gather(age, pop, -region, -year) %>% 
+  mutate(age = as.numeric(age)) %>% 
+  filter(age<85) %>% 
+  mutate(pop = as.numeric(pop))
+
+head(d_female)
+```
+
+# Population projection
+
+1. pick two countries, 1 with high fertility and 1 with low fertility. Here are the options:
+
+```{r}
+unique(df$region)
+```
+
+2. Calculate the NRR for each of the countries in 2010. Confirm that these are one high and one low, based on NRR values. 
+
+Remember: discrete version of NRR is
+
+$$
+NRR = \sum_x {_nL_x} \cdot _nF_x \cdot f_{fab}
+$$
+and the fraction female at birth is something like 0.4886. 
+
+
+```{r}
+
+countries <- c("Australia", "Kenya")
+ffab <- 0.4886
+NRRs <- df %>% 
+  left_join(dl) %>% 
+  filter(region %in% countries, year == 2010) %>% 
+  mutate(prod = Fx*Lx*ffab) %>% 
+  group_by(region) %>% 
+  summarise(NRR = sum(prod))
+  
+NRRs
+```
+
+
+## Leslie matrix
+
+3. Create a Leslie matrix for each of your countries. The function below will help. This is pretty ugly so if someone want to rewrite it feel free :)
+
+Note: Fx only covers 15-45, but it needs to be 0 for all other age groups (probably easiest to `left_join` `df` to `dl` then replace the `NA` values with 0s). 
+Note 2: From the WPP data we have a split first age group, but want to convert this into 0-5. Just sum the Lx values to get $_5L0$
+
+```{r}
+leslie <- function(nLx,
+                   nFx, 
+                   n_age_groups=17, # this default is based on length(seq(0, 80, by = 5))
+                   ffab = 0.4886){
+  L = matrix(0, nrow = n_age_groups, ncol = n_age_groups)
+  L[1,] = ffab * nLx[1]*(nFx[1:n_age_groups]+nFx[2:(n_age_groups+1)]*nLx[2:(n_age_groups+1)]/nLx[1:n_age_groups])/2 # top row 
+  L[1,ncol(L)] <- 0
+  diag(L[2:n_age_groups,1:(n_age_groups-1)]) = nLx[2:n_age_groups] / nLx[1:(n_age_groups-1)] # subdiagonal
+  return(L)
+}
+
+```
+
+```{r}
+
+# get the data we need
+
+leslie_data <- dl %>% 
+  filter(region %in% countries, year==2010) %>% 
+  left_join(df) %>% 
+  mutate(Fx = ifelse(is.na(Fx), 0, Fx)) %>% 
+  select(-ex, -period)
+
+# fix the first age group
+leslie_data <- leslie_data %>% 
+  group_by(region) %>% 
+  mutate(Lx = ifelse(age==0, Lx[age==0] + Lx[age==1], Lx)) %>%  
+  filter(age!=1)
+# get our age groups
+
+age_groups <- unique(leslie_data$age)
+
+# create leslie matrices
+
+AA <- leslie(nLx = leslie_data$Lx[leslie_data$region==countries[1]], 
+             nFx = leslie_data$Fx[leslie_data$region==countries[1]],
+             n_age_groups = length(age_groups))
+
+AK <- leslie(nLx = leslie_data$Lx[leslie_data$region==countries[2]], 
+             nFx = leslie_data$Fx[leslie_data$region==countries[2]],
+             n_age_groups = length(age_groups))
+```
+
+
+
+4. Confirm that the NRRs from the Leslie matrices are the same as your NRRs above. The formula is:
+
+$$
+NRR = \sum A_{1,j(x)} \frac{_nLx}{_nL_0}
+$$
+
+where $A$ is the Leslie matrix. I think the easiest way to do this in practice is `A[1,]%*%cumprod(c(1,diag(A[-1,])))`.
+
+```{r}
+
+AA[1,]%*%cumprod(c(1,diag(AA[-1,])))
+AK[1,]%*%cumprod(c(1,diag(AK[-1,])))
+
+NRRs
+
+```
+
+
+5. Get the 2010 populations for your two chosen countries. What does the age distribution look like (plot half an age pyramid). Given the NRRs what do expect the age pyramids ending up to look like?
+
+```{r}
+initial_pops <- d_female %>% 
+  filter(region %in% countries, year==2010)
+
+initial_pops %>% 
+  ggplot(aes(age, pop)) + 
+  geom_bar(stat = 'identity') +
+  coord_flip() + facet_grid(~region)
+```
+
+
+
+6. Project each population forward 200 years (i.e. 200/5 = 40 projection steps). For each country, you'll want to save every population for each age group and projection step in a matrix, and put the first column as your starting population. So something like this:
+
+```{r}
+
+# for country 1
+n <- 5
+n_age_groups <-  length(age_groups)
+n_projections <- 200/n
+
+initial_pop1 <- initial_pops %>% filter(region==countries[1]) %>% select(pop) %>% pull()
+initial_pop2 <- initial_pops %>% filter(region==countries[2]) %>% select(pop) %>% pull()
+
+# define population matrix K
+K1 <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+K1[,1] <- initial_pop1
+
+K2 <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+K2[,1] <- initial_pop2
+
+# do the projection!
+for(i in 2:(n_projections+1)){
+ K1[,i] <- AA%*%K1[,i-1]
+ K2[,i] <- AK%*%K2[,i-1]
+}
+
+
+```
+
+For the next bits, you probably want to take these two matrices and convert them back into a tibble for plotting. Something like this:
+
+```{r}
+# for country 1
+Kdf <- as_tibble(K1)
+colnames(Kdf) <- seq(from = 2010, to = (2010+n_projections*n), by = 5)
+Kdf <- cbind(age = age_groups, Kdf)
+
+# get in long format and then add proportion of population in each age group
+dk1 <- Kdf %>% 
+  gather(year, population, -age) %>%
+  mutate(year = as.numeric(year)) %>% 
+  group_by(year) %>%
+  mutate(proportion = population/sum(population), 
+         country = countries[1])
+
+# do the same for country 2
+Kdf <- as_tibble(K2)
+colnames(Kdf) <- seq(from = 2010, to = (2010+n_projections*n), by = 5)
+Kdf <- cbind(age = age_groups, Kdf)
+
+# get in long format and then add proportion of population in each age group
+dk2 <- Kdf %>% 
+  gather(year, population, -age) %>%
+  mutate(year = as.numeric(year)) %>% 
+  group_by(year) %>%
+  mutate(proportion = population/sum(population), 
+         country = countries[2])
+
+# then join them together
+dproj <- bind_rows(dk1, dk2)
+```
+
+7a. Plot the total population size over time 
+7b. Plot the proportion in each age group over time
+
+```{r}
+dproj %>% 
+  group_by(country, year) %>% 
+  summarise(pop = sum(population)) %>% 
+  ggplot(aes(year, pop, color = country)) + facet_wrap(~ country, scales = "free_y") + geom_line()
+```
+
+```{r}
+dproj %>% 
+  filter(age %in% seq(0, 80, by = 20)) %>% 
+  ggplot(aes(year, proportion, color = age, group = age)) + geom_line() +  facet_grid(~country)
+```
+
+
+## Eigendecompositions
+
+8. Do an eigendecomposition on both your `A`s using `eigen(A)`. What is the intrinsic growth rate? What is the implied stable population age structure? 
+
+Hints: $\lambda = e^{rn}$ where $\lambda$ is the leading eigenvalue and $c(x)$ is the first right eigenvector of $A$, normalized to sum to one. 
+
+```{r}
+eigen_AA <- eigen(AA)
+eigen_AK <- eigen(AK)
+
+rA <- Re(log(eigen_AA$values[1])/n)
+cA <- Re(eigen_AA$vectors[,1]/sum(eigen_AA$vectors[,1]))
+
+rK <- Re(log(eigen_AK$values[1])/n)
+cK <- Re(eigen_AK$vectors[,1]/sum(eigen_AK$vectors[,1]))
+
+rA; rK; cA; cK
+```
+
+
+9. Compare the $r$ and $c(x)$ obtained above to the implied growth rate and age distribution from your last projection step. 
+
+```{r}
+dproj %>% 
+   group_by(country, year) %>% 
+  summarise(pop = sum(population)) %>% 
+  mutate(r = log(pop/lag(pop))/5) %>% 
+  filter(row_number()==n()) %>% 
+  ungroup() %>% 
+  mutate(r_intrinsic = c(rA, rK))
+```
+
+```{r}
+last_year <- 2010+200
+
+dproj %>% 
+  filter(year==last_year) %>% 
+  mutate(stable_prop = c(cA, cK)) %>% 
+  gather(type, prop, -age, -country, -year, -population) %>% 
+  ggplot(aes(age, prop, fill = type)) + geom_bar(stat = "identity", position = "dodge") + 
+  coord_flip() + facet_wrap(~country) 
+```
+
+
+
+## Reproductive value and mean age at childbearing
+
+### Intuitive RV
+(Potentially skip) Let's start with a more intuitive approach to reproductive values. First, here's a function that will do a population projection and return the output in a tibble:
+
+```{r}
+pop_project <- function(A, # Leslie matrix
+                        initial_pop,
+                        age_groups,
+                        n = 5,
+                        n_age_groups = 17,
+                        n_projections = 40){
+  
+  K <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+  K[,1] <- initial_pop[1:n_age_groups]
+  
+  # do the projection!
+  for(i in 2:(n_projections+1)){
+    K[,i] <- A%*%K[,i-1] 
+  }
+  
+  # get K in a form that's easier to ggplot
+  # make into a dataframe, name columns as years and add an age column
+  Kdf <- as.data.frame(K)
+  colnames(Kdf) <- seq(from = 2010, to = (2010+n_projections*n), by = n)
+  Kdf <- cbind(age = age_groups, Kdf)
+  
+  # get in long format and then add proportion of population in each age group
+  Klong <- Kdf %>% 
+    gather(year, population, -age) %>%
+    group_by(year) %>%
+    mutate(proportion = population/sum(population), 
+           age = as.factor(age)) %>%
+    ungroup()
+  
+  return(Klong)
+}
+```
+
+Now we can change the value of the initial population and see how the final population size changes. E.g adding 100 to the first age group:
+
+```{r, eval = F}
+inital_pop_add_x[1] <- inital_pop_add_x[1]+100
+```
+
+10. Pick a country from above. Redo the 40-step projection multiple, adding 100 to each age group up to age 45. Record the final population size. 
+
+```{r}
+
+aus_initial <- initial_pops %>% filter(region=="Australia") %>% select(pop) %>% pull()
+
+reprod_age_groups <- seq(0, 45, by = 5)
+
+pops <- tibble(age = reprod_age_groups, pop = NA)
+
+for(i in 1:length(reprod_age_groups)){
+  
+  aus_initial_add <- aus_initial
+  aus_initial_add[i] <- aus_initial_add[i] + 100
+  
+  res <- pop_project(AA, aus_initial_add,
+            age_groups)
+  
+  pops$pop[i] <- res %>% 
+    filter(year==last_year) %>% 
+    summarise(pop = sum(population)) %>% 
+    select(pop) %>% 
+    pull()
+}
+
+```
+
+
+11. Plot the results from above over age.
+
+```{r}
+pops %>% 
+  ggplot(aes(age, pop)) + geom_line()
+```
+
+
+### RV from eigendecomposition
+
+For this part, redo your eigendecomposition on a Leslie matrix that just goes up to age 45, i.e.
+
+```{r, eval = F}
+reprod_age_groups <- seq(0, 45, by = 5)
+eigen_A <- eigen(A[1:length(reprod_age_groups), 1:length(reprod_age_groups)])
+```
+
+12. Calculate the reproductive value based on the eigendecomposition of your matrix. Hint: the reproductive values are the first row of $V^*$ where $V^*$ is $U^{-1}$ remultiplied the first element equal to 1. Plot the values. They should have the same shape as the graph above. 
+
+```{r}
+reprod_age_groups <- seq(0, 45, by = 5)
+eigen_AA <- eigen(AA[1:length(reprod_age_groups), 1:length(reprod_age_groups)])
+
+U <- eigen_AA$vectors
+U <-U%*%diag(1/U[1,])
+
+Uinv <- solve(U)
+Vstar <- diag(1/Uinv[,1]) %*% Uinv # normalize
+
+ggplot(tibble(age = reprod_age_groups, V = Re(Vstar[1,])), aes(age, V)) + geom_line()
+
+```
+
+
+13. Calculate the mean age at childbearing. Hint: $\mu = v^* \cdot c\cdot n$
+
+```{r}
+(Re((Vstar%*%U))*5)[1,1]
+```
+
+
+# Population momentum
+
+14. For each of your two countries, calculate the ratio of ultimate to current population under the hypothetical situation that NRR goes immediately to 1. Hint:
+
+$$
+\frac{K(U)}{K(-\epsilon)} = \frac{b(-\epsilon)e_0}{\sqrt{NRR}}
+$$
+
+Another hint: $b(-\epsilon)$ is the implied stable birth rate before the change, which given our stable population equations is equal to:
+
+$$
+b = \frac{1}{\int e^{-ra}l(a)da}
+$$
+
+which in discrete form is
+
+$$
+b = \frac{1}{\sum_a e^{-ra} {_nL_x}}
+$$
+
+
+```{r}
+exs <- dl %>% 
+  filter(region %in% countries, year==2010, age==0) %>% 
+  select(region, ex)
+
+NRRs
+
+rs <- tibble(region = countries, r = c(rA, rK))
+
+
+bs <- dl %>% 
+  filter(region %in% countries, year==2010) %>% 
+  select(region, age, Lx) %>% 
+  left_join(rs) %>% 
+  mutate(prod = Lx*exp(-r*age)) %>% 
+  group_by(region) %>% 
+  summarise(b = 1/sum(prod))
+
+bs %>% 
+  left_join(NRRs) %>% 
+  left_join(exs) %>% 
+  mutate(keyfitz = b*ex/sqrt(NRR))
+```
+
