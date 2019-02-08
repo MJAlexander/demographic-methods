@@ -17,7 +17,6 @@ Projections with migration for Canada.
 ```{r}
 library(tidyverse)
 library(here)
-library(rstan)
 ```
 
 Load in fertility rates and tidy up:
