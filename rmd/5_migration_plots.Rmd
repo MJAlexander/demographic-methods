@@ -1,0 +1,412 @@
+---
+title: 'Week 5: Migration'
+author: "Monica Alexander"
+date: "2/07/2019"
+output: html_document
+---
+
+Code to produce plots in lecture notes for week 5. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+```{r}
+library(tidyverse)
+library(here)
+library(rstan)
+```
+
+# Load in data
+
+Load in fertility rates and tidy up:
+
+```{r}
+df <- read_csv(here("data", "WPP2017_FERT_F07_AGE_SPECIFIC_FERTILITY.csv"), skip = 12)
+
+df <- df %>% 
+  rename(region = `Region, subregion, country or area *`, period = Period) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4))) %>% 
+  gather(age, Fx, -region, -period, -year) %>% 
+  mutate(age = as.numeric(age), Fx = Fx/1000)
+
+head(df)
+```
+
+
+Load in the life table data and tidy up:
+
+```{r}
+dl <- read_csv(here("data", "WPP2017_MORT_F17_3_ABRIDGED_LIFE_TABLE_FEMALE.csv"), skip = 16)
+
+dl <- dl %>% 
+  rename(region = `Region, subregion, country or area *`,
+         Lx = `Number of person-years lived L(x,n)`,
+         age = `Age (x)`,
+         period = Period) %>% 
+  select(region, period, age, Lx) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4)), Lx = Lx/10^5)
+
+head(dl)
+```
+
+Load in the population data: 
+
+```{r}
+d_female <- read_csv(here("data", "WPP2017_POP_F15_3_ANNUAL_POPULATION_BY_AGE_FEMALE.csv"), skip = 12)
+
+d_female <- d_female %>% 
+  rename(region = `Region, subregion, country or area *`,
+         year = `Reference date (as of 1 July)`) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`) %>% 
+  gather(age, pop, -region, -year)
+
+head(d_female)
+```
+
+# Population pyramids for Canada
+
+For Canada we have some age-specific data from StatCan:
+
+```{r}
+
+dmig <- read_csv(here("data", "CAN_mig_age.csv"))
+
+dmig <- dmig %>% mutate(mig = mig/1000)
+head(dmig)
+```
+
+Let's plot as a proportion of total population:
+
+```{r}
+
+d_female %>% 
+  filter(region=="Canada", year==2010) %>% 
+  mutate(age = as.numeric(age), pop = as.numeric(pop)) %>% 
+  left_join(dmig) %>% 
+  mutate(prop = mig/pop) %>% 
+  ggplot(aes(age, prop)) + geom_line() + 
+  ggtitle("Migration into Canada by age")
+```
+
+## Adding in migration
+
+Create a Leslie matrix for Canada using the 2010 WPP data. Here's the function:
+
+```{r}
+leslie <- function(nLx,
+                   nFx, 
+                   n_age_groups=17,
+                   ffab = 0.4886){
+  L = matrix(0, nrow = n_age_groups, ncol = n_age_groups)
+  L[1,] = ffab * nLx[1]*(nFx[1:n_age_groups]+nFx[2:(n_age_groups+1)]*nLx[2:(n_age_groups+1)]/nLx[1:n_age_groups])/2 # top row 
+  L[1,ncol(L)] <- 0
+  diag(L[2:n_age_groups,1:(n_age_groups-1)]) = nLx[2:n_age_groups] / nLx[1:(n_age_groups-1)] # subdiagonal
+  return(L)
+}
+```
+Here's the matrix:
+
+```{r}
+nLx <- dl %>% 
+  left_join(df) %>% 
+  filter(year==2010, region == "Canada", age<85) %>% 
+  select(Lx) %>% pull()
+
+## need to fix first age group
+
+nLx <- c(sum(nLx[1:2]), nLx[3:length(nLx)])
+
+nFx <- dl %>% 
+  left_join(df) %>% 
+  filter(year==2010, region == "Canada") %>% 
+  mutate(Fx = ifelse(is.na(Fx), 0, Fx)) %>% 
+  select(Fx) %>% pull()
+
+nFx <- nFx[-1]
+
+A <- leslie(nLx, nFx)
+A
+```
+
+Get the initial population vector for projection:
+
+```{r}
+Kt <- d_female %>% 
+  filter(region=="Canada", year==2010) %>% 
+  mutate(age = as.numeric(age)) %>% 
+  filter(age<85) %>% 
+  mutate(pop = as.numeric(pop)) %>% 
+  select(pop) %>% 
+  pull()
+  
+ggplot(tibble(age = seq(0, 80, by = 5), K = Kt), aes(age, K)) + 
+  geom_bar(stat= "identity") + coord_flip() + ylab("Population") + ggtitle("Female population, Canada 2010")
+```
+
+Do a projection with this Leslie matrix for 40 periods:
+
+```{r}
+age_groups <- seq(0, 80, by = 5)
+n_age_groups <-  length(age_groups)
+n_projections <- 40
+initial_pop <- Kt
+# define population matrix K
+K <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+K[,1] <- Kt[1:n_age_groups]
+
+# do the projection!
+for(i in 2:(n_projections+1)){
+  K[,i] <- A%*%K[,i-1] 
+}
+
+```
+
+Now. Let's add in the migrant schedule. 
+
+```{r}
+It <- d_female %>% 
+  filter(region=="Canada", year==2010) %>% 
+  mutate(age = as.numeric(age), pop = as.numeric(pop)) %>% 
+  left_join(dmig) %>% 
+  mutate(prop = mig/pop) %>% 
+  filter(age<85) %>% 
+  select(prop) %>% 
+  pull()
+```
+
+
+```{r}
+age_groups <- seq(0, 80, by = 5)
+n_age_groups <-  length(age_groups)
+n_projections <- 40
+initial_pop <- Kt
+# define population matrix K
+Kmig <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+Kmig[,1] <- Kt[1:n_age_groups]
+
+# do the projection!
+for(i in 2:(n_projections+1)){
+  Kmig[,i] <- A%*%(Kmig[,i-1]*(1+It/2)) + (Kmig[,i-1]*(It/2))
+}
+```
+
+What difference does adding in migration make?
+
+```{r}
+dproj <- tibble(age = age_groups, closed = K[, ncol(K)], with_migration = Kmig[, ncol(K)])
+
+dproj %>%
+  gather(projection, pop, -age) %>% 
+  group_by(projection) %>% 
+  mutate(prop = pop/sum(pop)) %>% 
+  ggplot(aes(age, prop, fill = projection)) + geom_bar(stat = 'identity', position = 'dodge') + 
+  coord_flip() + 
+  ylab("proportion") + 
+  ggtitle("Canada's population age structure, 2100\nwith and without migration")
+  ggsave(here("plots", "CAN_proj_close_mig.pdf"))
+```
+
+## Effect of fertility and mortality on population age strcture
+
+Calculate the TFR for Canada. It's 1.61, which is low. What would happen if we increased the TFR to 2? Let's investigate compared to increasing migration. 
+
+```{r}
+TFR <- df %>% 
+  filter(region=="Canada", year==2010) %>% 
+  summarise(TFR = sum(Fx)*5) %>% 
+  pull()
+
+TFR
+```
+
+Create new fertility rates:
+
+```{r}
+
+dfert <- df %>% 
+  filter(region=="Canada", year==2010) %>% 
+  mutate(Fx_high = Fx*2.1/TFR)
+
+```
+
+Create a new Leslie Matrix based on these rates:
+
+```{r}
+nFx <- dl %>% 
+  left_join(dfert) %>% 
+  filter(year==2010, region == "Canada") %>% 
+  mutate(Fx_high = ifelse(is.na(Fx_high), 0, Fx_high)) %>% 
+  select(Fx_high) %>% pull()
+
+nFx <- nFx[-1]
+
+A1 <- leslie(nLx, nFx)
+A1
+```
+
+This corresponds to increasing fertility by 25%. Compare the projection results if migration was increased by 25%. 
+
+```{r}
+age_groups <- seq(0, 80, by = 5)
+n_age_groups <-  length(age_groups)
+n_projections <- 40
+initial_pop <- Kt
+# define population matrix K
+Kfh <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+Kfh[,1] <- Kt[1:n_age_groups]
+
+# do the projection!
+for(i in 2:(n_projections+1)){
+  Kfh[,i] <- A1%*%(Kfh[,i-1]*(1+It/2)) + (Kfh[,i-1]*(It/2))
+}
+```
+
+```{r}
+Ith <- It*c(rep(0, 3), rep(2.1/TFR, 7), rep(0, 7))
+
+age_groups <- seq(0, 80, by = 5)
+n_age_groups <-  length(age_groups)
+n_projections <- 40
+initial_pop <- Kt
+# define population matrix K
+Kmh <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+Kmh[,1] <- Kt[1:n_age_groups]
+
+# do the projection!
+for(i in 2:(n_projections+1)){
+  Kmh[,i] <- A%*%(Kmh[,i-1]*(1+Ith/2)) + (Kmh[,i-1]*(Ith/2))
+}
+```
+
+Plot the differences: 
+```{r}
+dproj <- tibble(age = age_groups, base = Kmig[, ncol(K)], 
+                high_fertility = Kfh[, ncol(K)],
+                high_migration = Kmh[, ncol(K)])
+
+dproj %>%
+  gather(projection, pop, -age) %>% 
+  group_by(projection) %>% 
+  mutate(prop = pop/sum(pop)) %>% 
+  ggplot(aes(age, prop, fill = projection)) + geom_bar(stat = 'identity', position = 'dodge') + 
+  facet_grid(~projection) + 
+  coord_flip() + 
+  ylab("proportion") + 
+  ggtitle("Canada's population age structure, 2100\nBaseline, and fertility and migration increased by 25%")
+  ggsave(here("plots", "CAN_proj_scenarios.pdf"))
+```
+
+
+# Log-linear models
+
+Load in US regional data from ACS 2017:
+
+```{r}
+dr <- readRDS(here("data", "US_region_mig.RDS"))
+head(dr)
+
+dr %>% 
+  spread(to_region, n)
+
+dr <- dr %>% 
+  mutate(n_nd = ifelse(from_region==to_region, 0, n))
+
+dr %>% 
+  ungroup() %>% 
+  summarise(sum(n_nd))
+```
+
+```{r}
+
+mod <- glm(n_nd~as.factor(from_region)+as.factor(to_region),poisson(link=log), data = dr %>% filter(n_nd>0))
+
+summary(mod)
+
+dr %>% 
+  ungroup() %>% 
+  filter(n_nd>0) %>% 
+  select(-n) %>%
+  rename(data = n_nd) %>% 
+  bind_cols(fitted = fitted(mod)) %>% 
+  mutate(from_region =
+               factor(
+                   from_region,
+                   levels = 1:4,
+                   labels = c("Northeast", "Midwest", "South", "West")
+               ),
+         to_region =
+               factor(
+                   to_region,
+                   levels = 1:4,
+                   labels = c("Northeast", "Midwest", "South", "West")
+                   )) %>% 
+  gather(type, migrants, -to_region, -from_region) %>% 
+  ggplot(aes(from_region, to_region, fill = migrants/1000)) +
+  geom_tile() +
+  facet_grid(~type) +
+  theme_bw() + 
+  scale_fill_viridis_c() + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  ggtitle("Inter-regional migration, US 2016-2017\n Data from ACS, fitted with log-linear model")
+ggsave(here("plots", "US_regions_mig.pdf"))
+```
+
+# Model age curves of migration
+
+```{r}
+mig <- read_rds(here("data","US_age_mig.RDS"))
+
+y <- mig %>% ungroup() %>% filter(migrate1==3, statefip==12) %>%  select(prop) %>% pull()
+x <- as.numeric(as.character((unique(mig$age_group))))
+
+mig_data <- list(
+  N = length(x),
+  y=y,
+  x = x
+)
+
+fit1 <- stan(
+  file = here("code", "rc.stan"),  # Stan program
+  data = mig_data,    # named list of data
+  chains = 4,             # number of Markov chains
+  warmup = 1000,          # number of warmup iterations per chain
+  iter = 3000,            # total number of iterations per chain
+  cores = 2,              # number of cores (using 2 just for the vignette)
+  control = list(adapt_delta = 0.99, max_treedepth = 15),
+  refresh = 2000          # show progress every 'refresh' iteration
+)
+
+fit1
+
+
+```
+
+
+```{r}
+
+list_of_draws <- rstan::extract(fit1)
+
+y_hat <- matrix(nrow = length(list_of_draws[[1]]), ncol = length(x))
+for(i in 1:length(x)){
+  y_hat[,i] <- list_of_draws[["a1"]]*exp(-1*list_of_draws[["alpha1"]]*x[i]) + 
+    list_of_draws[["a2"]]*exp(-1*list_of_draws[["alpha2"]]*(x[i] - list_of_draws[["mu2"]]) - exp(-1*list_of_draws[["gamma2"]]*(x[i] - list_of_draws[["mu2"]]))) +
+    list_of_draws[["a3"]]*exp(-1*list_of_draws[["alpha3"]]*(x[i] - list_of_draws[["mu3"]]) - exp(-1*list_of_draws[["gamma3"]]*(x[i] - list_of_draws[["mu3"]]))) +
+    list_of_draws[["c"]]
+}
+
+dfit <- tibble(age = x, 
+               data = y, median = apply(y_hat, 2, median),
+               lower = apply(y_hat, 2, quantile,0.025),
+               upper = apply(y_hat, 2, quantile, 0.975))
+
+dfit %>% 
+  ggplot(aes(age, data)) + 
+  geom_point(color = "red") + 
+  geom_line(aes(x = age, y = median)) + 
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) + 
+  ggtitle("Florida migration age schedule, 2017 \nData and Rogers-Castro fit")
+ggsave(here("plots", "FL_age_mig_rc.pdf"))  
+```
+
