@@ -163,7 +163,7 @@ for(i in 2:(n_projections+1)){
 
 ```
 
-Now. Let's add in the migrant schedule. 
+Now. Let's add in the migrant schedule. Get the migration rates:
 
 ```{r}
 It <- d_female %>% 
@@ -176,6 +176,7 @@ It <- d_female %>%
   pull()
 ```
 
+Do the projection:
 
 ```{r}
 age_groups <- seq(0, 80, by = 5)
@@ -246,7 +247,7 @@ A1 <- leslie(nLx, nFx)
 A1
 ```
 
-This corresponds to increasing fertility by 25%. Compare the projection results if migration was increased by 25%. 
+This corresponds to increasing fertility by 25%. Do the projection:
 
 ```{r}
 age_groups <- seq(0, 80, by = 5)
@@ -262,6 +263,9 @@ for(i in 2:(n_projections+1)){
   Kfh[,i] <- A1%*%(Kfh[,i-1]*(1+It/2)) + (Kfh[,i-1]*(It/2))
 }
 ```
+
+
+Compare the projection results if migration was increased by 25%. 
 
 ```{r}
 Ith <- It*c(rep(2.1/TFR, 10), rep(0, 7))
@@ -294,8 +298,8 @@ dproj %>%
   facet_grid(~projection) + 
   coord_flip() + 
   ylab("proportion") + 
-  ggtitle("Canada's population age structure, 2100\nBaseline, and fertility and migration increased by 25%")
-  #ggsave(here("plots", "CAN_proj_scenarios.pdf"))
+  ggtitle("Canada's population age structure, 2210\nBaseline, and fertility and migration increased by 25%")
+  ggsave(here("plots", "CAN_proj_scenarios.pdf"))
 ```
 
 Implied growth rates:
@@ -487,9 +491,7 @@ mig_prop %>%
 ggsave(here("plots", "TAS_VIC_mig_age.pdf"))
 ```
 
-So the proportions associated with departures are probabilities of moving...
-
-Set up matrix as Vic, Tas to Vic, Tas, Vic to Tas. Assuming to return migrant, there are eight separate matrices. The native ones are as before with extra multipliers based on probability of migration
+Set up matrix as Vic, Tas to Vic, Tas, Vic to Tas. Assuming return migration, there are ten separate matrices. The native ones are as before with extra multipliers based on probability of migration
 
 ```{r}
 Lx_vic <- dlt %>% filter(state=="Victoria") %>% filter(age_group<75) %>% select(Lx) %>% pull()
@@ -533,6 +535,7 @@ log(Re(eigen(A_vn_vn)$values[1]))/5
 log(Re(eigen(A_tn_tn)$values[1]))/5
 ```
 
+Create one big Leslie matrix:
 
 ```{r}
 M <- rbind(cbind(A_vn_vn, A_vm_vn, matrix(0, 15, 15), matrix(0, 15, 15)),
@@ -541,11 +544,7 @@ cbind(matrix(0, 15, 15), matrix(0, 15, 15), A_tn_tn, A_tm_tn),
 cbind(A_vn_tm, A_tm_return, matrix(0, 15, 15), A_tm_tm))
 ```
 
-```{r}
-log(Re(eigen(M)$values[1]))/5
-
-plot(Re(eigen(M)$vectors[,1]/sum(eigen(M)$vectors[,1])))
-```
+Set up initial population:
 
 ```{r}
 K_vic <- dap %>% 
@@ -601,7 +600,7 @@ proj_vm <- K2[16:30,]
 proj_tn <- K2[31:45,]
 proj_tm <- K2[46:60,]
 ```
-
+Plot the results:
 
 ```{r}
 
@@ -696,7 +695,7 @@ dr %>%
   ungroup() %>% 
   summarise(sum(n_nd))
 ```
-
+Fit a log-linear model:
 ```{r}
 
 mod <- glm(n_nd~as.factor(from_region)+as.factor(to_region),poisson(link=log), data = dr %>% filter(n_nd>0))
@@ -734,6 +733,8 @@ ggsave(here("plots", "US_regions_mig.pdf"))
 
 # Model age curves of migration
 
+This is based on Florida migration (taken from the latest ACS).
+
 ```{r}
 mig <- read_rds(here("data","US_age_mig.RDS"))
 
@@ -761,7 +762,7 @@ fit1
 
 
 ```
-
+Plot the data, fit and 95% CIs. 
 
 ```{r}
 
