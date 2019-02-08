@@ -17,7 +17,7 @@ library(here)
 library(rstan)
 ```
 
-# Load in data
+# Load in WPP data
 
 Load in fertility rates and tidy up:
 
@@ -204,7 +204,7 @@ dproj %>%
   ggplot(aes(age, prop, fill = projection)) + geom_bar(stat = 'identity', position = 'dodge') + 
   coord_flip() + 
   ylab("proportion") + 
-  ggtitle("Canada's population age structure, 2100\nwith and without migration")
+  ggtitle("Canada's population age structure, 2210\nwith and without migration")
   ggsave(here("plots", "CAN_proj_close_mig.pdf"))
 ```
 
@@ -264,7 +264,7 @@ for(i in 2:(n_projections+1)){
 ```
 
 ```{r}
-Ith <- It*c(rep(0, 3), rep(2.1/TFR, 7), rep(0, 7))
+Ith <- It*c(rep(2.1/TFR, 10), rep(0, 7))
 
 age_groups <- seq(0, 80, by = 5)
 n_age_groups <-  length(age_groups)
@@ -295,7 +295,386 @@ dproj %>%
   coord_flip() + 
   ylab("proportion") + 
   ggtitle("Canada's population age structure, 2100\nBaseline, and fertility and migration increased by 25%")
-  ggsave(here("plots", "CAN_proj_scenarios.pdf"))
+  #ggsave(here("plots", "CAN_proj_scenarios.pdf"))
+```
+
+Implied growth rates:
+
+```{r}
+(log(sum(Kmig[,41]) ) - log(sum(Kmig[,40]) ))/5
+(log(sum(Kfh[,41]) ) - log(sum(Kfh[,40]) ))/5
+(log(sum(Kmh[,41]) ) - log(sum(Kmh[,40]) ))/5
+```
+
+
+# Two population Leslie Matrices
+
+Let's try a two population leslie matrix with Tasmania and Victoria. 
+
+Load in the life tables and make into five-year age groups:
+
+```{r}
+
+# VIC
+dv <- read_csv(here("data", "VIC_lt.csv"))
+
+dv$age_group <- cut(dv$Age,
+                                 breaks= c(seq(0, 75, by = 5), Inf),
+                                 labels = seq(0, 75, by = 5),
+                                 right = FALSE)
+dv$age_group <- as.numeric(as.character(dv$age_group))
+
+dv <- dv %>% 
+  group_by(age_group) %>% 
+  summarise(Lx = sum(Lx)/10^5) %>% 
+  mutate(state="Victoria")
+
+# TAS
+
+dt <- read_csv(here("data", "TAS_lt.csv"))
+
+dt$age_group <- cut(dt$Age,
+                                 breaks= c(seq(0, 75, by = 5), Inf),
+                                 labels = seq(0, 75, by = 5),
+                                 right = FALSE)
+dt$age_group <- as.numeric(as.character(dt$age_group))
+
+dt <- dt %>% 
+  group_by(age_group) %>% 
+  summarise(Lx = sum(Lx)/10^5) %>% 
+  mutate(state="Tasmania")
+
+dlt <- bind_rows(dv, dt)
+head(dlt)
+```
+
+Load in the fertility data:
+
+```{r}
+dfa <- read_csv(here("data", "AUS_state_fertility.csv"))
+head(dfa)
+
+dfa <- dfa %>% 
+  filter(Measure=="Fertility rate", 
+         Region %in% c("Victoria", "Tasmania")) %>% 
+  select(Age, Region, Value) %>% 
+  mutate(age_group=as.numeric(substr(Age, 1,2))) %>% 
+  rename(region=Region, Fx = Value) %>% 
+  select(-Age, age_group, region, Fx)
+```
+
+Load in population data:
+
+```{r}
+dap <- read_csv(here("data", "AUS_state_pop.csv"))
+
+# plot age pyramids
+
+dap %>% 
+  ungroup() %>% 
+  filter(State %in% c("Australia", "Tasmania"), Measure=="Estimated Resident Population") %>% 
+  select(State, Age, Sex, Value) %>% 
+  rename(region = State, pop = Value) %>% 
+  mutate(age_group = as.numeric(substr(Age, 1,2))) %>% 
+  filter(age_group<75, Sex!="Persons") %>% 
+  arrange(age_group) %>% 
+  group_by(region) %>% 
+  mutate(prop = pop/sum(pop),
+         prop=ifelse(Sex=="Males", -prop, prop)) %>% 
+  ggplot(aes(x = age_group, y = prop, fill = Sex)) + 
+  facet_wrap(~region)+
+  geom_bar(stat="identity")+
+  ggtitle("Population in each age group")+
+  ylab("proportion")+ 
+  coord_flip() + 
+  scale_y_continuous(breaks = seq(-.1, .1, 0.025), 
+                     labels = c(seq(.1, 0, -0.025), seq(0.025, .1, 0.025))) + 
+  scale_fill_brewer(palette = "Set1") 
+ggsave(here("plots", 
+            "AUS_TAS_pyramid.pdf"))
+
+
+dap <- dap %>% 
+  filter(State %in% c("Victoria", "Tasmania"), Sex == "Females", Measure=="Estimated Resident Population") %>% 
+  select(State, Age, Value) %>% 
+  rename(region = State, pop = Value) %>% 
+  mutate(age_group = as.numeric(substr(Age, 1,2))) 
+head(dap)
+```
+
+Load in the migration data:
+
+```{r}
+dma <- read_csv(here("data", "AUS_interstate_mig.csv"))
+head(dma)
+
+dma <- dma %>% 
+  filter(Region %in% c("Victoria", "Tasmania"), Sex == "Females") %>% 
+  select(Age, Region, Value, `Interstate Migration`) %>% 
+  mutate(age_group=as.numeric(substr(Age, 1,2))) %>% 
+  rename(region=Region)
+```
+
+We need to work out about what percent of in and out migration total is due to movements between these two states.
+
+```{r}
+dmf <- read_csv(here("data", "AUS_interstate_flows.csv"))
+
+in_mig <- dmf %>% 
+  filter(`State of Arrival` %in% c("Victoria", "Tasmania"), Sex == "Females") %>% 
+  rename(region_in = `State of Arrival`, region_out = `State of Departure`) %>% 
+  group_by(region_in, region_out) %>% 
+  summarise(in_mig = sum(Value)) %>% 
+  group_by(region_in) %>% 
+  mutate(prop_in = in_mig/sum(in_mig)) %>% 
+  filter(region_out %in% c("Victoria", "Tasmania"))
+
+out_mig <- dmf %>% 
+  filter(`State of Departure` %in% c("Victoria", "Tasmania"), Sex == "Females") %>% 
+  rename(region_in = `State of Arrival`, region_out = `State of Departure`) %>% 
+  group_by(region_in, region_out) %>% 
+  summarise(out_mig = sum(Value)) %>% 
+  group_by(region_out) %>% 
+  mutate(prop_out = out_mig/sum(out_mig)) %>% 
+  filter(region_in %in% c("Victoria", "Tasmania"))
+
+both_mig <- in_mig %>% 
+  left_join(out_mig)
+
+both_mig
+
+prop_in_vic_to_tas <- both_mig %>% filter(region_in=="Tasmania", region_out=="Victoria") %>% select(prop_in) %>% pull()
+prop_in_tas_to_vic <- both_mig %>% filter(region_in=="Victoria", region_out=="Tasmania") %>% select(prop_in) %>% pull()
+prop_out_vic_to_tas <- both_mig %>% filter(region_in=="Tasmania", region_out=="Victoria") %>% select(prop_out) %>% pull()
+prop_out_tas_to_vic <- both_mig %>% filter(region_in=="Victoria", region_out=="Tasmania") %>% select(prop_out) %>% pull()
+
+```
+
+27% of in-migration to TAS comes from VIC; 5% of in-migration to VIC comes from TAS. 
+5% of out migration from VIC is to TAS. 35% of out migration from TAS is to VIC. 
+
+So want to multiply the age schedules by these numbers:
+
+```{r}
+dio <- dma %>% 
+  filter(`Interstate Migration`!= "NET Interstate") %>% 
+  rename(measure = `Interstate Migration`) %>% 
+   mutate(mig_adj = case_when(
+     region=="Tasmania"&measure=="NIM Arrivals" ~ Value*prop_in_vic_to_tas,
+     region=="Tasmania"&measure=="NIM Departures" ~ Value*prop_out_tas_to_vic,
+     region=="Victoria"&measure=="NIM Arrivals" ~ Value*prop_in_tas_to_vic,
+     region=="Victoria"&measure=="NIM Departures" ~ Value*prop_out_vic_to_tas
+  ))
+
+dnet <- dio %>% 
+  group_by(age_group, region) %>% 
+  summarise(net = mig_adj[measure=="NIM Arrivals"] - mig_adj[measure=="NIM Departures"]) 
+```
+
+Work out probability of migration based on populations:
+
+```{r}
+mig_prop <- dap %>% 
+  select(-Age) %>% 
+  left_join(dio) %>% 
+  mutate(mig_prop = mig_adj/pop) 
+
+mig_prop %>% 
+  filter(measure=="NIM Departures") %>% 
+  ggplot(aes(age_group, mig_prop, color = region)) + geom_line() +
+  ggtitle("Proportion of population migrating by age")+
+  ylab("proportion") + xlab("age")
+ggsave(here("plots", "TAS_VIC_mig_age.pdf"))
+```
+
+So the proportions associated with departures are probabilities of moving...
+
+Set up matrix as Vic, Tas to Vic, Tas, Vic to Tas. Assuming to return migrant, there are eight separate matrices. The native ones are as before with extra multipliers based on probability of migration
+
+```{r}
+Lx_vic <- dlt %>% filter(state=="Victoria") %>% filter(age_group<75) %>% select(Lx) %>% pull()
+Lx_tas <- dlt %>% filter(state=="Tasmania") %>% filter(age_group<75) %>% select(Lx) %>% pull()
+
+Fx_vic <- c(rep(0, 3), dfa %>% filter(region=="Victoria")  %>% select(Fx) %>% pull(), rep(0, 5))/1000
+Fx_tas <- c(rep(0, 3), dfa %>% filter(region=="Tasmania")  %>% select(Fx) %>% pull(), rep(0, 5))/1000
+
+Mx_vic <- mig_prop %>% arrange(age_group) %>% filter(region=="Victoria", measure=="NIM Departures") %>% filter(age_group<75) %>% select(mig_prop) %>% pull()
+Mx_tas <- (mig_prop %>% arrange(age_group) %>% filter(region=="Tasmania", measure=="NIM Departures") %>% filter(age_group<75) %>% select(mig_prop) %>% pull())*3
+
+Mx_vic_return <- rep(0.8, length(Mx_tas))
+Mx_tas_return <- rep(0.1, length(Mx_tas))
+
+```
+
+
+```{r}
+A_vn_vn <- leslie(nLx = Lx_vic, nFx = Fx_vic, n_age_groups = length(Lx_vic))*(1-Mx_vic)
+A_tn_tn <- leslie(nLx = Lx_tas, nFx = Fx_tas, n_age_groups = length(Lx_vic))*(1-Mx_tas)
+
+A_vn_tm <- leslie(nLx = Lx_tas, nFx = Fx_tas, n_age_groups = length(Lx_vic))*(Mx_vic)
+A_tn_vm <- leslie(nLx = Lx_vic, nFx = Fx_vic, n_age_groups = length(Lx_vic))*(Mx_tas)
+
+A_tm_tm <- leslie(nLx = Lx_tas, nFx = rep(0, length(Lx_vic)), n_age_groups = length(Lx_vic))*(1-Mx_vic_return)
+A_vm_vm <- leslie(nLx = Lx_vic, nFx = rep(0, length(Lx_vic)), n_age_groups = length(Lx_vic))*(1-Mx_tas_return)
+
+A_tm_tn <- leslie(nLx = Lx_tas, nFx = Fx_tas, n_age_groups = length(Lx_vic))
+A_tm_tn <- rbind(A_tm_tn[1,], matrix(0, nrow = (length(Lx_vic)-1), ncol = length(Lx_vic)))*(1-Mx_tas_return)
+A_vm_vn <- leslie(nLx = Lx_vic, nFx = Fx_vic, n_age_groups = length(Lx_vic))
+A_vm_vn <- rbind(A_vm_vn[1,], matrix(0, nrow = (length(Lx_vic)-1), ncol = length(Lx_vic)))*(1-Mx_vic_return)
+
+A_vm_return <- leslie(nLx = Lx_vic, nFx = Fx_vic, n_age_groups = length(Lx_vic))*(Mx_vic_return)
+A_tm_return <- leslie(nLx = Lx_tas, nFx = Fx_tas, n_age_groups = length(Lx_vic))*(Mx_tas_return)
+
+```
+
+
+```{r}
+log(Re(eigen(A_vn_vn)$values[1]))/5
+log(Re(eigen(A_tn_tn)$values[1]))/5
+```
+
+
+```{r}
+M <- rbind(cbind(A_vn_vn, A_vm_vn, matrix(0, 15, 15), matrix(0, 15, 15)),
+cbind(matrix(0, 15, 15), A_vm_vm, A_tn_vm, A_vm_return),
+cbind(matrix(0, 15, 15), matrix(0, 15, 15), A_tn_tn, A_tm_tn),
+cbind(A_vn_tm, A_tm_return, matrix(0, 15, 15), A_tm_tm))
+```
+
+```{r}
+log(Re(eigen(M)$values[1]))/5
+
+plot(Re(eigen(M)$vectors[,1]/sum(eigen(M)$vectors[,1])))
+```
+
+```{r}
+K_vic <- dap %>% 
+  filter(age_group<75, region=="Victoria") %>% 
+  arrange(age_group) %>% 
+  select(pop) %>% 
+  pull()
+
+K_tas <- dap %>% 
+  filter(age_group<75, region=="Tasmania") %>% 
+  arrange(age_group) %>% 
+  select(pop) %>% 
+  pull()
+
+M_vic_to_tas <- mig_prop %>% 
+  filter(region=="Victoria", measure=="NIM Departures") %>%
+  filter(age_group<75) %>% 
+  arrange(age_group) %>% 
+  select(mig_adj) %>% 
+  pull()
+
+M_tas_to_vic <- mig_prop %>% 
+  filter(region=="Tasmania", measure=="NIM Departures") %>%
+  filter(age_group<75) %>% 
+  arrange(age_group) %>% 
+  select(mig_adj) %>% 
+  pull()
+  
+Kall <- c(K_vic, M_tas_to_vic, K_tas, M_vic_to_tas)
+Kall
+```
+
+Project
+
+```{r}
+age_groups <- seq(0, 70, by = 5)
+n_age_groups <-  length(age_groups)
+n_projections <- 40
+initial_pop <- Kall
+# define population matrix K
+K2 <- matrix(0, nrow = n_age_groups*4, ncol = n_projections+1)
+K2[,1] <- Kall
+
+# do the projection!
+for(i in 2:(n_projections+1)){
+  K2[,i] <- M%*%(K2[,i-1])
+}
+```
+
+```{r}
+proj_vn <- K2[1:15,]
+proj_vm <- K2[16:30,]
+proj_tn <- K2[31:45,]
+proj_tm <- K2[46:60,]
+```
+
+
+```{r}
+
+df_proj_tn <- as_tibble(proj_tn)
+colnames(df_proj_tn) <- seq(2016, (2016+40*5), by = 5)
+df_proj_tn %>% 
+  mutate(age = age_groups) %>% 
+  gather(year, pop, -age) %>% 
+  ggplot(aes(as.numeric(year),  pop, color = factor(age))) + geom_line()
+
+df_proj_tm <- as_tibble(proj_tm)
+colnames(df_proj_tm) <- seq(2016, (2016+40*5), by = 5)
+df_proj_tm %>% 
+  mutate(age = age_groups) %>% 
+  gather(year, pop, -age) %>% 
+  group_by(year) %>% 
+  mutate(prop = pop/sum(pop), age = factor(age)) %>% 
+  ungroup() %>% 
+  mutate(year = as.numeric(year)) %>% 
+  ggplot(aes(year,  prop, color = age)) + geom_line(lwd = 0.9) + 
+  ggtitle("Projected population by age, Tasmanian migrants")
+ggsave(here("plots", "TAS_mig_proj.pdf"))
+
+df_proj_vn <- as_tibble(proj_vn)
+colnames(df_proj_vn) <- seq(2016, (2016+40*5), by = 5)
+df_proj_vn %>% 
+  mutate(age = age_groups) %>% 
+  gather(year, pop, -age) %>% 
+  ggplot(aes(as.numeric(year),  pop, color = factor(age))) + geom_line()
+
+df_proj_vm <- as_tibble(proj_vm)
+colnames(df_proj_vm) <- seq(2016, (2016+40*5), by = 5)
+df_proj_vm %>% 
+  mutate(age = age_groups) %>% 
+  gather(year, pop, -age) %>% 
+  group_by(year) %>% 
+  mutate(prop = pop/sum(pop), age = factor(age)) %>% 
+  ungroup() %>% 
+  mutate(year = as.numeric(year)) %>% 
+  ggplot(aes(year,  prop, color = age)) + geom_line(lwd = 0.9) + 
+  ggtitle("Projected population by age, Victorian migrants")
+ggsave(here("plots", "VIC_mig_proj.pdf"))
+
+```
+
+Stable age structures
+
+```{r}
+dfproj <- df_proj_tn %>% 
+  mutate(age = age_groups) %>% 
+  gather(year, pop, -age) %>% 
+  mutate(type = "Tasmanian native") %>% 
+  bind_rows(df_proj_tm %>% 
+  mutate(age = age_groups) %>% 
+  gather(year, pop, -age) %>% 
+  mutate(type = "Tasmanian migrant")) %>% 
+  bind_rows(df_proj_vn %>% 
+  mutate(age = age_groups) %>% 
+  gather(year, pop, -age) %>% 
+  mutate(type = "Victorian native")) %>% 
+  bind_rows(df_proj_vm %>% 
+  mutate(age = age_groups) %>% 
+  gather(year, pop, -age) %>% 
+  mutate(type = "Victorian migrant"))
+
+dfproj %>% 
+  mutate(year = as.numeric(year)) %>% 
+  filter(year==2016+n_projections*5) %>% 
+  group_by(type) %>% 
+  mutate(prop = pop/sum(pop)) %>% 
+  ggplot(aes(age, prop, fill = type)) + geom_bar(stat = 'identity', position = 'dodge') + coord_flip() + facet_wrap(~type)
+ggsave(here("plots", "TAS_VIC_stable.pdf"))
+
 ```
 
 
