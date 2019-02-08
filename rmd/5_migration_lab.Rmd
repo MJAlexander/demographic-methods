@@ -1,0 +1,207 @@
+---
+title: 'Week 5: Migration'
+author: "Monica Alexander"
+date: "2/8/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+
+Projections with migration for Canada. 
+
+# Load in WPP data
+
+```{r}
+library(tidyverse)
+library(here)
+library(rstan)
+```
+
+Load in fertility rates and tidy up:
+
+```{r}
+df <- read_csv(here("data", "WPP2017_FERT_F07_AGE_SPECIFIC_FERTILITY.csv"), skip = 12)
+
+df <- df %>% 
+  rename(region = `Region, subregion, country or area *`, period = Period) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4))) %>% 
+  gather(age, Fx, -region, -period, -year) %>% 
+  mutate(age = as.numeric(age), Fx = Fx/1000)
+
+head(df)
+```
+
+
+Load in the life table data and tidy up:
+
+```{r}
+dl <- read_csv(here("data", "WPP2017_MORT_F17_3_ABRIDGED_LIFE_TABLE_FEMALE.csv"), skip = 16)
+
+dl <- dl %>% 
+  rename(region = `Region, subregion, country or area *`,
+         Lx = `Number of person-years lived L(x,n)`,
+         age = `Age (x)`,
+         period = Period) %>% 
+  select(region, period, age, Lx) %>% 
+  mutate(year = as.numeric(substr(period, 1, 4)), Lx = Lx/10^5)
+
+head(dl)
+```
+
+
+Load in the population data and tidy up: 
+
+```{r}
+d_female <- read_csv(here("data", "WPP2017_POP_F15_3_ANNUAL_POPULATION_BY_AGE_FEMALE.csv"), skip = 12)
+
+d_female <- d_female %>% 
+  rename(region = `Region, subregion, country or area *`,
+         year = `Reference date (as of 1 July)`) %>% 
+  select(-Index, -Variant, -Notes, -`Country code`) %>% 
+  gather(age, pop, -region, -year) %>% 
+  mutate(age = as.numeric(age), pop = as.numeric(pop))
+
+head(d_female)
+```
+
+
+# Canada migration data
+
+For Canada we have some age-specific data from StatCan. This data gives the number of international migrants by age group. 
+
+```{r}
+
+dmig <- read_csv(here("data", "CAN_mig_age.csv"))
+
+dmig <- dmig %>% mutate(mig = mig/1000)
+head(dmig)
+```
+
+1. Plot migration by age as a proportion of total population. You will need to join the population (`d_female`) and migration (`dmig`) data sets.
+
+# Building a Leslie Matrix
+
+Let's create a Leslie Matrix for Canada using WPP data (like last week). Here's the `leslie` function:
+
+```{r}
+leslie <- function(nLx,
+                   nFx, 
+                   n_age_groups=17,
+                   ffab = 0.4886){
+  L = matrix(0, nrow = n_age_groups, ncol = n_age_groups)
+  L[1,] = ffab * nLx[1]*(nFx[1:n_age_groups]+nFx[2:(n_age_groups+1)]*nLx[2:(n_age_groups+1)]/nLx[1:n_age_groups])/2 # top row 
+  L[1,ncol(L)] <- 0
+  diag(L[2:n_age_groups,1:(n_age_groups-1)]) = nLx[2:n_age_groups] / nLx[1:(n_age_groups-1)] # subdiagonal
+  return(L)
+}
+```
+
+
+Here's the matrix:
+
+```{r}
+nLx <- dl %>% 
+  left_join(df) %>% 
+  filter(year==2010, region == "Canada", age<85) %>% 
+  select(Lx) %>% pull()
+
+## need to fix first age group
+
+nLx <- c(sum(nLx[1:2]), nLx[3:length(nLx)])
+
+nFx <- dl %>% 
+  left_join(df) %>% 
+  filter(year==2010, region == "Canada") %>% 
+  mutate(Fx = ifelse(is.na(Fx), 0, Fx)) %>% 
+  select(Fx) %>% pull()
+
+nFx <- nFx[-1]
+
+A <- leslie(nLx, nFx)
+A
+```
+
+# Do a base population projection (no migration yet)
+
+Get the initial population vector for projection:
+
+```{r}
+Kt <- d_female %>% 
+  filter(region=="Canada", year==2010) %>% 
+  mutate(age = as.numeric(age)) %>% 
+  filter(age<85) %>% 
+  mutate(pop = as.numeric(pop)) %>% 
+  select(pop) %>% 
+  pull()
+  
+ggplot(tibble(age = seq(0, 80, by = 5), K = Kt), aes(age, K)) + 
+  geom_bar(stat= "identity") + coord_flip() + ylab("Population") + ggtitle("Female population, Canada 2010")
+```
+
+
+Do a projection with this Leslie matrix for 40 periods:
+
+```{r}
+age_groups <- seq(0, 80, by = 5)
+n_age_groups <-  length(age_groups)
+n_projections <- 40
+# define population matrix K
+K <- matrix(0, nrow = n_age_groups, ncol = n_projections+1)
+K[,1] <- Kt[1:n_age_groups]
+
+# do the projection!
+for(i in 2:(n_projections+1)){
+  K[,i] <- A%*%K[,i-1] 
+}
+
+```
+
+# Add migration to the projection
+
+2. Create a vector of migration rates by age, $I_t$. Note: you plotted this above. 
+
+3. Repeat the projection for 40 periods, but this time with migration. 
+
+Notes: 
+
+- Save your projections as `K_mig` or something similar (don't overwrite `K` above)
+- From the lecture 
+
+\begin{eqnarray*}
+K(t+5) &=&
+A \times
+\begin{bmatrix}
+    _5K_0(t)+{_5K_0}(t){_5i_0} /2  \\
+   _5K_5(t)+{_5K_5}(t){_5i_5} /2     \\
+     _5K_10(t)+{_5K_10}(t){_5i_{10}} /2\\
+    \dots \\
+  _{\infty}K_{\omega}(t)+_{\infty}K_{\omega}(t){_5i_0} /2
+\end{bmatrix}  + 
+\begin{bmatrix}
+    _5K_0(t){_5i_0} /2  \\
+   _5K_5(t){_5i_5}  /2     \\
+     _5K_{10}(t){_5i_{10}}/2 \\
+    \dots \\
+   _{\infty}K_{\omega}(t) _{\infty}i_{\omega}/2
+\end{bmatrix}
+\end{eqnarray*}
+
+4. What difference does adding in migration make? Plot the age structure from the last projection time period for projections with and without migration. 
+
+# Increasing fertility and migration
+
+5. Calculate Canada's TFR. 
+
+6. Construct a new set of age-fertility rates such that TFR = 2.5.
+
+7. Construct a new Leslie matrix based on these higher fertility rates.
+
+8. Do a projection for 40 steps based on this new Leslie matrix, and explore the result. Has the shape of the age pyramid changed?
+
+9. Investigate what happens to the projected population for different migration scenarios (going back to the original fertility rates).
+    + Does increasing migration proportional across all age groups change the shape of the age pyramid?
+    + What is the implied increase in migration needed in ages < 50 such that the rate of increase of the population is the same as when you increased TFR to 2.5?

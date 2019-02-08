@@ -1,0 +1,190 @@
+﻿MEASURE,Measure,AGE,Age,ASGS_2011,Region,FREQUENCY,Frequency,TIME,Time,Value
+1,Births,A15,15 - 19,0,Australia,A,Annual,2017,2017,7401
+2,Female population,A15,15 - 19,0,Australia,A,Annual,2017,2017,722532
+11,Fertility rate,A15,15 - 19,0,Australia,A,Annual,2017,2017,10.2
+1,Births,A15,15 - 19,1,New South Wales,A,Annual,2017,2017,2079
+2,Female population,A15,15 - 19,1,New South Wales,A,Annual,2017,2017,227743
+11,Fertility rate,A15,15 - 19,1,New South Wales,A,Annual,2017,2017,9.1
+1,Births,A15,15 - 19,2,Victoria,A,Annual,2017,2017,1165
+2,Female population,A15,15 - 19,2,Victoria,A,Annual,2017,2017,182903
+11,Fertility rate,A15,15 - 19,2,Victoria,A,Annual,2017,2017,6.4
+1,Births,A15,15 - 19,3,Queensland,A,Annual,2017,2017,2250
+2,Female population,A15,15 - 19,3,Queensland,A,Annual,2017,2017,151502
+11,Fertility rate,A15,15 - 19,3,Queensland,A,Annual,2017,2017,14.9
+1,Births,A15,15 - 19,4,South Australia,A,Annual,2017,2017,442
+2,Female population,A15,15 - 19,4,South Australia,A,Annual,2017,2017,50495
+11,Fertility rate,A15,15 - 19,4,South Australia,A,Annual,2017,2017,8.8
+1,Births,A15,15 - 19,5,Western Australia,A,Annual,2017,2017,950
+2,Female population,A15,15 - 19,5,Western Australia,A,Annual,2017,2017,75266
+11,Fertility rate,A15,15 - 19,5,Western Australia,A,Annual,2017,2017,12.6
+1,Births,A15,15 - 19,6,Tasmania,A,Annual,2017,2017,223
+2,Female population,A15,15 - 19,6,Tasmania,A,Annual,2017,2017,15221
+11,Fertility rate,A15,15 - 19,6,Tasmania,A,Annual,2017,2017,14.7
+1,Births,A15,15 - 19,7,Northern Territory,A,Annual,2017,2017,227
+2,Female population,A15,15 - 19,7,Northern Territory,A,Annual,2017,2017,7097
+11,Fertility rate,A15,15 - 19,7,Northern Territory,A,Annual,2017,2017,32
+1,Births,A15,15 - 19,8,Australian Capital Territory,A,Annual,2017,2017,65
+2,Female population,A15,15 - 19,8,Australian Capital Territory,A,Annual,2017,2017,12196
+11,Fertility rate,A15,15 - 19,8,Australian Capital Territory,A,Annual,2017,2017,5.3
+1,Births,A20,20 - 24,0,Australia,A,Annual,2017,2017,36117
+2,Female population,A20,20 - 24,0,Australia,A,Annual,2017,2017,841181
+11,Fertility rate,A20,20 - 24,0,Australia,A,Annual,2017,2017,42.9
+1,Births,A20,20 - 24,1,New South Wales,A,Annual,2017,2017,10811
+2,Female population,A20,20 - 24,1,New South Wales,A,Annual,2017,2017,264401
+11,Fertility rate,A20,20 - 24,1,New South Wales,A,Annual,2017,2017,40.9
+1,Births,A20,20 - 24,2,Victoria,A,Annual,2017,2017,7366
+2,Female population,A20,20 - 24,2,Victoria,A,Annual,2017,2017,227464
+11,Fertility rate,A20,20 - 24,2,Victoria,A,Annual,2017,2017,32.4
+1,Births,A20,20 - 24,3,Queensland,A,Annual,2017,2017,9481
+2,Female population,A20,20 - 24,3,Queensland,A,Annual,2017,2017,170086
+11,Fertility rate,A20,20 - 24,3,Queensland,A,Annual,2017,2017,55.7
+1,Births,A20,20 - 24,4,South Australia,A,Annual,2017,2017,2295
+2,Female population,A20,20 - 24,4,South Australia,A,Annual,2017,2017,56172
+11,Fertility rate,A20,20 - 24,4,South Australia,A,Annual,2017,2017,40.9
+1,Births,A20,20 - 24,5,Western Australia,A,Annual,2017,2017,4125
+2,Female population,A20,20 - 24,5,Western Australia,A,Annual,2017,2017,82844
+11,Fertility rate,A20,20 - 24,5,Western Australia,A,Annual,2017,2017,49.8
+1,Births,A20,20 - 24,6,Tasmania,A,Annual,2017,2017,940
+2,Female population,A20,20 - 24,6,Tasmania,A,Annual,2017,2017,15111
+11,Fertility rate,A20,20 - 24,6,Tasmania,A,Annual,2017,2017,62.3
+1,Births,A20,20 - 24,7,Northern Territory,A,Annual,2017,2017,657
+2,Female population,A20,20 - 24,7,Northern Territory,A,Annual,2017,2017,8246
+11,Fertility rate,A20,20 - 24,7,Northern Territory,A,Annual,2017,2017,79.8
+1,Births,A20,20 - 24,8,Australian Capital Territory,A,Annual,2017,2017,437
+2,Female population,A20,20 - 24,8,Australian Capital Territory,A,Annual,2017,2017,16780
+11,Fertility rate,A20,20 - 24,8,Australian Capital Territory,A,Annual,2017,2017,26.1
+1,Births,A25,25 - 29,0,Australia,A,Annual,2017,2017,82656
+2,Female population,A25,25 - 29,0,Australia,A,Annual,2017,2017,924039
+11,Fertility rate,A25,25 - 29,0,Australia,A,Annual,2017,2017,89.5
+1,Births,A25,25 - 29,1,New South Wales,A,Annual,2017,2017,25491
+2,Female population,A25,25 - 29,1,New South Wales,A,Annual,2017,2017,296047
+11,Fertility rate,A25,25 - 29,1,New South Wales,A,Annual,2017,2017,86.1
+1,Births,A25,25 - 29,2,Victoria,A,Annual,2017,2017,20925
+2,Female population,A25,25 - 29,2,Victoria,A,Annual,2017,2017,250556
+11,Fertility rate,A25,25 - 29,2,Victoria,A,Annual,2017,2017,83.5
+1,Births,A25,25 - 29,3,Queensland,A,Annual,2017,2017,17272
+2,Female population,A25,25 - 29,3,Queensland,A,Annual,2017,2017,178521
+11,Fertility rate,A25,25 - 29,3,Queensland,A,Annual,2017,2017,96.8
+1,Births,A25,25 - 29,4,South Australia,A,Annual,2017,2017,5320
+2,Female population,A25,25 - 29,4,South Australia,A,Annual,2017,2017,57412
+11,Fertility rate,A25,25 - 29,4,South Australia,A,Annual,2017,2017,92.7
+1,Births,A25,25 - 29,5,Western Australia,A,Annual,2017,2017,9453
+2,Female population,A25,25 - 29,5,Western Australia,A,Annual,2017,2017,96806
+11,Fertility rate,A25,25 - 29,5,Western Australia,A,Annual,2017,2017,97.7
+1,Births,A25,25 - 29,6,Tasmania,A,Annual,2017,2017,1578
+2,Female population,A25,25 - 29,6,Tasmania,A,Annual,2017,2017,15490
+11,Fertility rate,A25,25 - 29,6,Tasmania,A,Annual,2017,2017,102
+1,Births,A25,25 - 29,7,Northern Territory,A,Annual,2017,2017,1093
+2,Female population,A25,25 - 29,7,Northern Territory,A,Annual,2017,2017,11829
+11,Fertility rate,A25,25 - 29,7,Northern Territory,A,Annual,2017,2017,92.5
+1,Births,A25,25 - 29,8,Australian Capital Territory,A,Annual,2017,2017,1516
+2,Female population,A25,25 - 29,8,Australian Capital Territory,A,Annual,2017,2017,17281
+11,Fertility rate,A25,25 - 29,8,Australian Capital Territory,A,Annual,2017,2017,87.8
+1,Births,A30,30 - 34,0,Australia,A,Annual,2017,2017,109925
+2,Female population,A30,30 - 34,0,Australia,A,Annual,2017,2017,924202
+11,Fertility rate,A30,30 - 34,0,Australia,A,Annual,2017,2017,119
+1,Births,A30,30 - 34,1,New South Wales,A,Annual,2017,2017,34388
+2,Female population,A30,30 - 34,1,New South Wales,A,Annual,2017,2017,294244
+11,Fertility rate,A30,30 - 34,1,New South Wales,A,Annual,2017,2017,116.9
+1,Births,A30,30 - 34,2,Victoria,A,Annual,2017,2017,31119
+2,Female population,A30,30 - 34,2,Victoria,A,Annual,2017,2017,248317
+11,Fertility rate,A30,30 - 34,2,Victoria,A,Annual,2017,2017,125.3
+1,Births,A30,30 - 34,3,Queensland,A,Annual,2017,2017,19930
+2,Female population,A30,30 - 34,3,Queensland,A,Annual,2017,2017,176522
+11,Fertility rate,A30,30 - 34,3,Queensland,A,Annual,2017,2017,112.9
+1,Births,A30,30 - 34,4,South Australia,A,Annual,2017,2017,6783
+2,Female population,A30,30 - 34,4,South Australia,A,Annual,2017,2017,58332
+11,Fertility rate,A30,30 - 34,4,South Australia,A,Annual,2017,2017,116.4
+1,Births,A30,30 - 34,5,Western Australia,A,Annual,2017,2017,12221
+2,Female population,A30,30 - 34,5,Western Australia,A,Annual,2017,2017,101802
+11,Fertility rate,A30,30 - 34,5,Western Australia,A,Annual,2017,2017,120.2
+1,Births,A30,30 - 34,6,Tasmania,A,Annual,2017,2017,1770
+2,Female population,A30,30 - 34,6,Tasmania,A,Annual,2017,2017,15544
+11,Fertility rate,A30,30 - 34,6,Tasmania,A,Annual,2017,2017,114
+1,Births,A30,30 - 34,7,Northern Territory,A,Annual,2017,2017,1212
+2,Female population,A30,30 - 34,7,Northern Territory,A,Annual,2017,2017,11618
+11,Fertility rate,A30,30 - 34,7,Northern Territory,A,Annual,2017,2017,104.4
+1,Births,A30,30 - 34,8,Australian Capital Territory,A,Annual,2017,2017,2491
+2,Female population,A30,30 - 34,8,Australian Capital Territory,A,Annual,2017,2017,17676
+11,Fertility rate,A30,30 - 34,8,Australian Capital Territory,A,Annual,2017,2017,141
+1,Births,A35,35 - 39,0,Australia,A,Annual,2017,2017,59512
+2,Female population,A35,35 - 39,0,Australia,A,Annual,2017,2017,832770
+11,Fertility rate,A35,35 - 39,0,Australia,A,Annual,2017,2017,71.5
+1,Births,A35,35 - 39,1,New South Wales,A,Annual,2017,2017,19287
+2,Female population,A35,35 - 39,1,New South Wales,A,Annual,2017,2017,266541
+11,Fertility rate,A35,35 - 39,1,New South Wales,A,Annual,2017,2017,72.4
+1,Births,A35,35 - 39,2,Victoria,A,Annual,2017,2017,17471
+2,Female population,A35,35 - 39,2,Victoria,A,Annual,2017,2017,219165
+11,Fertility rate,A35,35 - 39,2,Victoria,A,Annual,2017,2017,79.7
+1,Births,A35,35 - 39,3,Queensland,A,Annual,2017,2017,10002
+2,Female population,A35,35 - 39,3,Queensland,A,Annual,2017,2017,163058
+11,Fertility rate,A35,35 - 39,3,Queensland,A,Annual,2017,2017,61.3
+1,Births,A35,35 - 39,4,South Australia,A,Annual,2017,2017,3475
+2,Female population,A35,35 - 39,4,South Australia,A,Annual,2017,2017,53441
+11,Fertility rate,A35,35 - 39,4,South Australia,A,Annual,2017,2017,65.1
+1,Births,A35,35 - 39,5,Western Australia,A,Annual,2017,2017,6395
+2,Female population,A35,35 - 39,5,Western Australia,A,Annual,2017,2017,89779
+11,Fertility rate,A35,35 - 39,5,Western Australia,A,Annual,2017,2017,71.3
+1,Births,A35,35 - 39,6,Tasmania,A,Annual,2017,2017,876
+2,Female population,A35,35 - 39,6,Tasmania,A,Annual,2017,2017,15197
+11,Fertility rate,A35,35 - 39,6,Tasmania,A,Annual,2017,2017,57.7
+1,Births,A35,35 - 39,7,Northern Territory,A,Annual,2017,2017,580
+2,Female population,A35,35 - 39,7,Northern Territory,A,Annual,2017,2017,9563
+11,Fertility rate,A35,35 - 39,7,Northern Territory,A,Annual,2017,2017,60.7
+1,Births,A35,35 - 39,8,Australian Capital Territory,A,Annual,2017,2017,1422
+2,Female population,A35,35 - 39,8,Australian Capital Territory,A,Annual,2017,2017,15893
+11,Fertility rate,A35,35 - 39,8,Australian Capital Territory,A,Annual,2017,2017,89.5
+1,Births,A40,40 - 44,0,Australia,A,Annual,2017,2017,12414
+2,Female population,A40,40 - 44,0,Australia,A,Annual,2017,2017,806204
+11,Fertility rate,A40,40 - 44,0,Australia,A,Annual,2017,2017,15.4
+1,Births,A40,40 - 44,1,New South Wales,A,Annual,2017,2017,4177
+2,Female population,A40,40 - 44,1,New South Wales,A,Annual,2017,2017,256396
+11,Fertility rate,A40,40 - 44,1,New South Wales,A,Annual,2017,2017,16.3
+1,Births,A40,40 - 44,2,Victoria,A,Annual,2017,2017,3708
+2,Female population,A40,40 - 44,2,Victoria,A,Annual,2017,2017,207952
+11,Fertility rate,A40,40 - 44,2,Victoria,A,Annual,2017,2017,17.8
+1,Births,A40,40 - 44,3,Queensland,A,Annual,2017,2017,2058
+2,Female population,A40,40 - 44,3,Queensland,A,Annual,2017,2017,165311
+11,Fertility rate,A40,40 - 44,3,Queensland,A,Annual,2017,2017,12.5
+1,Births,A40,40 - 44,4,South Australia,A,Annual,2017,2017,683
+2,Female population,A40,40 - 44,4,South Australia,A,Annual,2017,2017,52844
+11,Fertility rate,A40,40 - 44,4,South Australia,A,Annual,2017,2017,12.9
+1,Births,A40,40 - 44,5,Western Australia,A,Annual,2017,2017,1230
+2,Female population,A40,40 - 44,5,Western Australia,A,Annual,2017,2017,85273
+11,Fertility rate,A40,40 - 44,5,Western Australia,A,Annual,2017,2017,14.4
+1,Births,A40,40 - 44,6,Tasmania,A,Annual,2017,2017,204
+2,Female population,A40,40 - 44,6,Tasmania,A,Annual,2017,2017,15719
+11,Fertility rate,A40,40 - 44,6,Tasmania,A,Annual,2017,2017,13
+1,Births,A40,40 - 44,7,Northern Territory,A,Annual,2017,2017,103
+2,Female population,A40,40 - 44,7,Northern Territory,A,Annual,2017,2017,8302
+11,Fertility rate,A40,40 - 44,7,Northern Territory,A,Annual,2017,2017,12.4
+1,Births,A40,40 - 44,8,Australian Capital Territory,A,Annual,2017,2017,249
+2,Female population,A40,40 - 44,8,Australian Capital Territory,A,Annual,2017,2017,14258
+11,Fertility rate,A40,40 - 44,8,Australian Capital Territory,A,Annual,2017,2017,17.5
+1,Births,A45,45 - 49,0,Australia,A,Annual,2017,2017,1022
+2,Female population,A45,45 - 49,0,Australia,A,Annual,2017,2017,841082
+11,Fertility rate,A45,45 - 49,0,Australia,A,Annual,2017,2017,1.2
+1,Births,A45,45 - 49,1,New South Wales,A,Annual,2017,2017,334
+2,Female population,A45,45 - 49,1,New South Wales,A,Annual,2017,2017,263343
+11,Fertility rate,A45,45 - 49,1,New South Wales,A,Annual,2017,2017,1.3
+1,Births,A45,45 - 49,2,Victoria,A,Annual,2017,2017,329
+2,Female population,A45,45 - 49,2,Victoria,A,Annual,2017,2017,217410
+11,Fertility rate,A45,45 - 49,2,Victoria,A,Annual,2017,2017,1.5
+1,Births,A45,45 - 49,3,Queensland,A,Annual,2017,2017,158
+2,Female population,A45,45 - 49,3,Queensland,A,Annual,2017,2017,172476
+11,Fertility rate,A45,45 - 49,3,Queensland,A,Annual,2017,2017,0.9
+1,Births,A45,45 - 49,4,South Australia,A,Annual,2017,2017,61
+2,Female population,A45,45 - 49,4,South Australia,A,Annual,2017,2017,58534
+11,Fertility rate,A45,45 - 49,4,South Australia,A,Annual,2017,2017,1
+1,Births,A45,45 - 49,5,Western Australia,A,Annual,2017,2017,94
+2,Female population,A45,45 - 49,5,Western Australia,A,Annual,2017,2017,88936
+11,Fertility rate,A45,45 - 49,5,Western Australia,A,Annual,2017,2017,1.1
+1,Births,A45,45 - 49,6,Tasmania,A,Annual,2017,2017,12
+2,Female population,A45,45 - 49,6,Tasmania,A,Annual,2017,2017,18002
+11,Fertility rate,A45,45 - 49,6,Tasmania,A,Annual,2017,2017,0.7
+1,Births,A45,45 - 49,7,Northern Territory,A,Annual,2017,2017,9
+2,Female population,A45,45 - 49,7,Northern Territory,A,Annual,2017,2017,8356
+11,Fertility rate,A45,45 - 49,7,Northern Territory,A,Annual,2017,2017,1.1
+1,Births,A45,45 - 49,8,Australian Capital Territory,A,Annual,2017,2017,25
+2,Female population,A45,45 - 49,8,Australian Capital Territory,A,Annual,2017,2017,13855
+11,Fertility rate,A45,45 - 49,8,Australian Capital Territory,A,Annual,2017,2017,1.8
