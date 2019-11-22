@@ -754,7 +754,7 @@ fit1 <- stan(
   warmup = 1000,          # number of warmup iterations per chain
   iter = 3000,            # total number of iterations per chain
   cores = 2,              # number of cores (using 2 just for the vignette)
-  control = list(adapt_delta = 0.99, max_treedepth = 15),
+  #control = list(adapt_delta = 0.99, max_treedepth = 15),
   refresh = 2000          # show progress every 'refresh' iteration
 )
 
