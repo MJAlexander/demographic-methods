@@ -1,0 +1,215 @@
+---
+title: "Bayesian Lee-Carter"
+author: "Monica Alexander"
+date: "7/23/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Let's estimate a Lee-Carter model for Australian males. 
+
+NOTE: Bare bones here, will fill in later
+
+# Data
+
+Read in the data and tidy up
+
+```{r}
+library(tidyverse)
+library(here)
+library(janitor) 
+library(patchwork)
+library(rstan)
+library(tidybayes)
+
+d <- read_table(here("data/AUS_Mx_1x1.txt"), skip = 2, col_types = 'dcddd')
+
+# tidy up 
+d <- d %>% 
+  clean_names() %>% 
+  mutate(age = as.numeric(ifelse(age=="110+", "110", age))) %>% 
+  filter(age<101) %>% # older ages problematic in earlier years
+  pivot_longer(female:total, names_to = "sex", values_to = "mx")
+
+```
+
+# SVD
+
+Get the matrix of age-specific rates:
+
+```{r}
+m_tx <- d %>% 
+  filter(sex=="male") %>% 
+  select(-sex) %>% 
+  pivot_wider(names_from = "age", values_from = "mx") %>% 
+  select(-year) %>% 
+  as.matrix()
+
+ages <- unique(d$age)
+years <- unique(d$year)
+
+```
+
+log and demean those rates, and get $a_x$, which is the logged mean:
+
+```{r}
+logm_tx <- log(m_tx)
+ax <- apply(logm_tx, 2, mean)
+```
+
+Do the SVD
+
+```{r}
+swept_logm_tx <- sweep(logm_tx, 2, ax)
+
+svd_mx <- svd(swept_logm_tx)
+
+bx <- svd_mx$v[, 1]/sum(svd_mx$v[, 1])
+kt <- svd_mx$d[1] * svd_mx$u[, 1] * sum(svd_mx$v[, 1])
+
+```
+
+Plot the results:
+
+```{r}
+lc_age_df <- tibble(age = ages, ax = ax, bx = bx)
+lc_time_df <- tibble(year = years, kt = kt)
+
+p1 <- ggplot(lc_age_df, aes(age, ax)) + 
+  geom_line(lwd = 1.1) + 
+  ggtitle("ax values")
+
+p2 <- ggplot(lc_age_df, aes(age, bx)) + 
+  geom_line(lwd = 1.1) + 
+  ggtitle("bx values")
+
+p3 <- ggplot(lc_time_df, aes(year, kt)) + 
+  geom_line(lwd = 1.1) + 
+  ggtitle("kt values")
+
+p1+p2+p3
+```
+
+What is the interpretation of each of these components? 
+
+<p style="color:red"> To fill in, for now can talk about it </p>
+
+Let's plot the data versus fit for a few different years
+
+```{r, fig.width=8, fig.height=4}
+d %>% 
+  filter(sex=="male") %>% 
+  left_join(lc_age_df) %>% 
+  left_join(lc_time_df) %>% 
+  mutate(estimate = exp(ax+bx*kt)) %>% 
+  select(year, age, mx, estimate) %>% 
+  rename(data = mx) %>% 
+  #pivot_longer(data:estimate, names_to = "source", values_to = "value") %>% 
+  filter(year %in% seq(1928, 2018, by = 30)) %>% 
+  ggplot(aes(age, data)) + 
+  geom_point(aes(color = "data")) + 
+  geom_line(aes(age, estimate, color = "fit"), lwd = 1.1)+
+  facet_grid(~year) + 
+  scale_y_log10() + 
+  ylab("mortality rate") +
+  scale_color_brewer(name = "",palette = "Set1") + 
+  theme_bw()
+```
+
+# Bayesian time series model for $k_t$
+
+Read in deaths and populatioon files
+
+```{r}
+d_deaths <- read_table(here("data/AUS_Deaths_1x1.txt"), skip = 2)
+d_pop <- read_table(here("data/AUS_Population.txt"), skip = 2)
+
+# tidy up 
+d_deaths <- d_deaths %>% 
+  clean_names() %>% 
+  mutate(age = as.numeric(ifelse(age=="110+", "110", age))) %>% 
+  filter(age<101) %>% # older ages problematic in earlier years
+  pivot_longer(female:total, names_to = "sex", values_to = "deaths")
+
+d_pop <- d_pop %>% 
+  clean_names() %>% 
+  mutate(age = as.numeric(ifelse(age=="110+", "110", age))) %>% 
+  filter(age<101) %>% # older ages problematic in earlier years
+  pivot_longer(female:total, names_to = "sex", values_to = "population")
+
+
+```
+
+Stan format
+
+```{r}
+years_lc <- 2010:2018
+
+D <- d_deaths %>% 
+  filter(sex=="male", year %in% years_lc) %>% 
+  select(-sex) %>% 
+  mutate(deaths = round(deaths)) %>% 
+  pivot_wider(names_from = "age", values_from = "deaths") %>% 
+  select(-year) %>% 
+  as.matrix()
+
+P <- d_pop %>%
+  filter(sex=="male", year %in% years_lc) %>%
+  select(-sex) %>%
+  mutate(population = round(population)) %>%
+  pivot_wider(names_from = "age", values_from = "population") %>%
+  select(-year) %>%
+  as.matrix()
+
+
+stan_data <- list(D = D, P = P, 
+                  nyears = length(years_lc), 
+                  nages = length(ages),
+                  nprojyears = 5,
+                  ax = ax,
+                  bx = bx,
+                  kt = kt[which(years %in% years_lc)])
+
+mod <- stan(data = stan_data, file = here("code/lee_carter.stan"))
+```
+Plot $k_t$ projection
+```{r}
+mod %>% 
+  gather_draws(mu_k[i], mu_k_proj[j]) %>% 
+  median_qi() %>% 
+  ungroup %>% 
+  mutate(year = years_lc[1]:2023, kt = c(kt[which(years %in% years_lc)], rep(NA, 5))) %>% 
+  ggplot(aes(year, .value)) + geom_line() + 
+  geom_point(aes(year, kt))+
+  geom_ribbon(aes(ymin = .lower, ymax = .upper), alpha = 0.2)
+```
+
+Plot 2018 and 2013 mortality rate estimate/projections
+
+```{r}
+d_res <- mod %>% 
+  gather_draws(log_mu[t,x], log_mu_proj[p,x]) %>% 
+  median_qi() %>% 
+  ungroup() %>% 
+  mutate(year = years_lc[t]) %>% 
+  mutate(year = ifelse(is.na(year), (2019:2023)[p], year)) %>% 
+  mutate(age = ages[x]) %>% 
+  left_join(d %>% filter(sex=="male") %>% select(year, age, mx)) 
+
+d_res %>% 
+  filter(year==2018|year==2023) %>% 
+  ggplot(aes(age, exp(.value))) + 
+  geom_line() + 
+  geom_ribbon(aes(ymin = exp(.lower), ymax = exp(.upper)), alpha = 0.2) + 
+  scale_y_log10() + 
+  facet_wrap(~year) + 
+  ylab("mortality rate")
+```
+
+
+To-do: convert to life expectancy
+
+
