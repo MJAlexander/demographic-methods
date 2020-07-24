@@ -1,0 +1,86 @@
+---
+title: "Bayesian Gompertz"
+author: "Monica Alexander"
+date: "7/23/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Some code to estimate Gompertz deaths densities, and the two parameters (in re-parameterized form), $\beta$ and $M$. Why death densities? Useful to know; sometimes we don't know exposure to risk, so all we have is the death counts. 
+
+```{r}
+library(tidyverse)
+library(here)
+library(janitor) 
+library(rstan)
+library(tidybayes)
+d_deaths <- read_table(here("data/AUS_Deaths_1x1.txt"), skip = 2)
+d_deaths <- d_deaths %>% 
+  clean_names() %>% 
+  mutate(age = as.numeric(ifelse(age=="110+", "110", age))) %>% 
+  filter(age<101) %>% # older ages problematic in earlier years
+  pivot_longer(female:total, names_to = "sex", values_to = "deaths")
+```
+
+Start simple with just one year and sex, pick females in 2015. Given what we know about Gompertz, let's just estimate from age 30. Get Stan data
+
+```{r}
+y <- d_deaths %>% 
+  filter(year==2015, sex == "female", age>29) %>% 
+  mutate(deaths = as.integer(deaths)) %>% 
+  select(deaths) %>% 
+  pull()
+
+D <- sum(y)
+
+ages <- 30:100
+nages <- length(y)
+
+stan_data <- list(y = y,
+                  log_D = log(D),
+                  ages = ages,
+                  nages = nages)
+
+```
+
+Fit. We get estimate of $\beta = 0.1$ and $M = 87.4$.
+
+```{r}
+mod <- stan(data = stan_data, file = here("code/gompertz_deaths_density.stan"))
+mod
+```
+
+Let's plot the deaths and $M$ on the same chart.
+
+```{r}
+post <- extract(mod)
+d_deaths %>% 
+  filter(year==2015, sex == "female", age>29) %>% 
+  ggplot(aes(age, deaths)) + geom_point() + 
+  geom_vline(xintercept = median(post[["M"]]), col = 2)
+```
+
+Now let's compare these estimates to estimates of $\beta$ and $M$ based on the usual Gompertz `lm`. Need to read in the mortality rates. Estimates are fairly close. 
+
+```{r}
+d <- read_table(here("data/AUS_Mx_1x1.txt"), skip = 2, col_types = 'dcddd')
+
+# tidy up 
+d <- d %>% 
+  clean_names() %>% 
+  mutate(age = as.numeric(ifelse(age=="110+", "110", age))) %>% 
+  filter(age<101) %>% # older ages problematic in earlier years
+  pivot_longer(female:total, names_to = "sex", values_to = "mx")
+
+d %>% 
+  filter(year==2015, sex == "female", age>29) %>% 
+  mutate(log_mx = log(mx)) %>% 
+  summarise(alpha = exp(coef(lm(log_mx~age)))[1],
+            beta = coef(lm(log_mx~age))[2],
+            M = 1/beta*log(beta/alpha))
+```
+
+So why bother estimating based on deaths densities? Again, because sometimes we may only have death counts. A good motivating example here, which I encourage you to look into further, is the Censoc dataset: https://censoc.berkeley.edu/ These data link census records with social security deaths, thereby allowing for the study of social and other inequalities in mortality. However the data are hard to work with: not only do we just have death counts, but the observation window is truncated. 
