@@ -1,0 +1,153 @@
+---
+title: "SVD modeling"
+author: "Monica Alexander"
+date: "8/2/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Purpose
+
+Show how to run a SVD-based regression in Stan to estimate age-specific mortality rates. Again, just the bare bones for now, but lots to experiment with!
+
+# The example
+
+Age-specific mortality rates due to opioid overdoses in the US by state and year, from 1999-2017. The raw data have lots of missing values because any death counts less than 10 have not been reported. (extension here would be to explicitly model these censored deaths).
+
+Goals of modeling are to capture age-specific rates within the time periods observed, and project trends forward into the future. (Note that the Stan code doesn't do the projection but should be easy enough to do based on other code provided in the `generated quantities` block).
+
+# The model summarized in words
+
+Deaths due to opioids are Poisson distributed with rate equal to population times the mortality rate. Opioid mortality rates are modeled on the log scale as the combination of three basis functions or principal components. These principal components are derived from national-level age-specific opioid mortality rates via SVD. The coefficients on the principal components are modeled hierarchically. The means of the group-level coefficients are modeled as a random walk. 
+
+# The model summarized in equations
+
+\begin{eqnarray*}
+D_{xst} &\sim& \text{Poisson}(P_{xst}\cdot \mu_{xst})\\
+\log \mu &=& \beta_{st1}Y_{x1} + \beta_{st2}Y_{x2} + \beta_{st3}Y_{x3}\\
+\beta_{stk} &\sim& N(\theta_{tk}, \sigma_{\beta k})\\
+\Delta \theta_{tk} &\sim& N(0, \sigma_{\theta k})
+\end{eqnarray*}
+
+## How to project
+
+Projection happens through the group-level means. Project forward based on random walk, then draw values of the $\beta$s based on the rest of the model specification. Note that this may not be the most sensible time series model in this context was a nice example to implement. 
+
+# Here's the code to run the thing
+
+Packages and data
+
+```{r}
+library(here)
+library(tidyverse)
+library(rstan)
+library(tidybayes)
+
+# national data
+df_nat <- read_csv(here("data/opioid_national.csv"))
+# state data
+to_model <- read_csv(here("data/opioid_state.csv"))
+```
+
+SVD of national data; extract the first three left singular vectors 
+
+```{r}
+
+# what do the curves look like
+
+df_nat %>% 
+  ggplot(aes(age, opioid_deaths/pop, color = factor(year))) + geom_line()
+
+m_tx <- df_nat %>% 
+  mutate(mx = opioid_deaths/pop) %>% 
+  filter(!is.na(age)) %>% 
+  select(year, age, mx) %>% 
+  pivot_wider(names_from = "age", values_from = "mx") %>% 
+  ungroup() %>% 
+  select(-year) %>% 
+  as.matrix()
+
+ages <- unique(df_nat$age)
+years <- unique(df_nat$year)
+
+logm_tx <- log(m_tx)
+swept_logm_tx <- sweep(logm_tx, 2, ax)
+svd_mx <- svd(logm_tx)
+pcs <- svd_mx$v[, 1:3]
+
+# look to see what these look like
+
+lc_age_df <- tibble(age = ages, pc1 = pcs[,1], pc2 = pcs[,2], pc3 = pcs[,3])
+lc_age_df %>% 
+  pivot_longer(pc1:pc3, names_to = "quantity", values_to = "value") %>% 
+  ggplot(aes(age, value)) + geom_line() + facet_wrap(~quantity, scales = "free_y")
+```
+
+Data for model
+
+```{r}
+states <- sort(unique(to_model$abbrev))
+
+deaths <- to_model %>% ungroup() %>% select(opioid_deaths) %>% pull()
+pop <- to_model %>% ungroup() %>% select(pop) %>% pull()
+age_i <- as.numeric(as.factor(to_model %>% ungroup() %>% select(age) %>% pull()))
+year_i <- as.numeric(as.factor(to_model %>% ungroup() %>% select(year) %>% pull()))
+state_i <- as.numeric(as.factor(to_model %>% ungroup() %>% select(abbrev) %>% pull()))
+N <- length(deaths)
+X <- length(ages)
+Y <- lc_age_df %>% 
+  select(pc1:pc3) %>% 
+  as.matrix()
+K <- ncol(Y)
+
+```
+
+Model
+
+```{r}
+stan_data <- list(deaths = deaths, log_pop = log(pop), N = N, X = X, S = max(state_i), K = 3, T = max(year_i), Y = Y)
+mod <- stan(file = here("code/svd.stan"), data = stan_data)
+```
+
+Example plot (for West Virginia in 2015). Dots are data
+
+```{r}
+
+res <- mod %>% 
+  gather_draws(yhat[x,s,t]) %>% 
+  median_qi() %>% 
+  mutate(age = ages[x], state = states[s], year = years[t]) 
+
+res %>% 
+  filter(state == "WV", year==2015) %>% 
+  ggplot(aes(age, exp(.value))) + geom_line() + 
+  geom_ribbon(aes(ymin = exp(.lower), ymax = exp(.upper)), alpha = 0.2)+
+  geom_point(data = to_model %>% filter(abbrev=="WV", year==2015), aes(age, mx)) + ylab("mortality rate")
+```
+
+Plot the group-level coffeicients. First one suggests mortality going up over time. Second one suggests the double-humped pattern becoming more obvious over time. Third one suggests the third PC doesn't add much. 
+
+```{r}
+res_thetas <- mod %>% 
+  gather_draws(mu_beta[t,k]) %>% 
+  median_qi() %>% 
+  mutate(year = years[t]) 
+
+res_thetas %>% 
+  ggplot(aes(year, .value)) + geom_line() + 
+  geom_ribbon(aes(ymin = (.lower), ymax = (.upper)), alpha = 0.2)+
+  facet_wrap(~k, scales = "free_y") + 
+  ylab("Group-level coffeicients") + 
+  ggtitle("Coefficients on three principal components")
+```
+
+
+# Notes
+
+This is very quick. Model could be improved with different specifications, potential things to try:
+- Add auto-correlated random effect to expression for $\mu_{xst}$ to pick up state-specific deviations better
+- Time series model on betas not thetas?
+- Also need to add projection code
