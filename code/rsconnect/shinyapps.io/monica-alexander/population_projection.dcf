@@ -1,0 +1,14 @@
+name: population_projection
+title: population_projection
+username:
+account: monica-alexander
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 6075889
+bundleId: 5791543
+url: https://monica-alexander.shinyapps.io/population_projection/
+when: 1649791388.80392
+lastSyncTime: 1649791388.80394
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: 0_intro_R.R|data/.DS_Store|gompertz_deaths_density.stan|lee_carter.stan|rc_flexible.stan|rc.stan|svd.stan
